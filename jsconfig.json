@@ -1,0 +1,13 @@
+{
+  // Type-checks the @ts-check'd JS shim without a build step: `npx tsc -p jsconfig.json`.
+  // The shipped file is the source itself — this config exists only for editors and CI linting.
+  "compilerOptions": {
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "target": "es2022",
+    "module": "es2022",
+    "lib": ["es2022", "dom"]
+  },
+  "include": ["src/WebGl.Renderer/wwwroot/**/*.js"]
+}

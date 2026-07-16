@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WebGl.Renderer.Tests/WebGl.Renderer.Tests.csproj" />
+    <Project Path="src/WebGl.Renderer/WebGl.Renderer.csproj" />
+  </Folder>
+  <Project Path="../Codecs/src/SharpAstro.Codecs.Abstractions/SharpAstro.Codecs.Abstractions.csproj" />
+  <Project Path="../Codecs/src/SharpAstro.Color.Icc/SharpAstro.Color.Icc.csproj" />
+  <Project Path="../Codecs/src/SharpAstro.Png/SharpAstro.Png.csproj" />
+  <Project Path="../DIR.Lib/src/DIR.Lib.SourceGenerators/DIR.Lib.SourceGenerators.csproj" />
+  <Project Path="../DIR.Lib/src/DIR.Lib/DIR.Lib.csproj" />
+  <Project Path="../Fonts.Lib/src/SharpAstro.Fonts/SharpAstro.Fonts.csproj" />
+  <Project Path="../LALR.CC/LALR.CC.SourceGenerators/LALR.CC.SourceGenerators.csproj" />
+  <Project Path="../LALR.CC/LALR.CC/LALR.CC.csproj" />
+</Solution>

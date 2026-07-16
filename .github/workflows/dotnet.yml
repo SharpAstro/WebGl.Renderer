@@ -1,0 +1,54 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  VERSION_PREFIX: 1.0.${{ github.run_number }}
+  VERSION_REV: ${{ github.run_attempt }}
+  VERSION_HASH: +${{ github.sha }}
+  BUILD_CONF: Release
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # No sibling checkout in CI: DIR.Lib resolves from NuGet (UseLocalDirLib=false via Exists()).
+      - name: Restore
+        run: dotnet restore src/WebGl.Renderer/WebGl.Renderer.csproj && dotnet restore src/WebGl.Renderer.Tests/WebGl.Renderer.Tests.csproj
+
+      - name: Build
+        run: dotnet build src/WebGl.Renderer/WebGl.Renderer.csproj -c $BUILD_CONF --no-restore -p:Version=${VERSION_PREFIX}${VERSION_REV}${VERSION_HASH} -p:FileVersion=${VERSION_PREFIX}.${VERSION_REV} -p:ContinuousIntegrationBuild=true
+
+      # Headless test surface: command-buffer encoding, shader-source sanity, real-font text
+      # encode over a fake JS bridge. Real-browser (Playwright) coverage is a future lane.
+      - name: Test
+        run: dotnet test src/WebGl.Renderer.Tests/WebGl.Renderer.Tests.csproj -c $BUILD_CONF
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: src/WebGl.Renderer/bin/Release/*.nupkg
+
+  publish-nuget:
+    needs: build-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Push to nuget.org
+        run: dotnet nuget push "**/*.nupkg" -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }} --skip-duplicate
