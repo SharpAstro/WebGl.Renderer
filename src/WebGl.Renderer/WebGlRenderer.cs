@@ -24,7 +24,9 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
     private readonly ManagedFontRasterizer _rasterizer;
     private readonly bool _ownsRasterizer;
 
-    private PipelineId? _activePipeline;
+    // Tracked as int so custom pipeline ids (which continue past the fixed PipelineId table)
+    // share the same redundant-switch elision as the built-ins.
+    private int? _activePipeline;
     private RGBAColor32? _activeColor;
 
     private WebGlRenderer(WebGlContext ctx, IWebGlBridge bridge,
@@ -125,11 +127,13 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
 
     // ---- pipeline/uniform state tracking ----------------------------------------------------------
 
-    private void EnsurePipeline(PipelineId pipeline)
+    private void EnsurePipeline(PipelineId pipeline) => EnsurePipelineId((int)pipeline);
+
+    private void EnsurePipelineId(int pipelineId)
     {
-        if (_activePipeline == pipeline) return;
-        Surface.Emit(Opcode.UseProgram, [(int)pipeline]);
-        _activePipeline = pipeline;
+        if (_activePipeline == pipelineId) return;
+        Surface.Emit(Opcode.UseProgram, [pipelineId]);
+        _activePipeline = pipelineId;
         _activeColor = null; // uColor lives per program — rebind after a program switch
     }
 

@@ -45,6 +45,44 @@ public sealed class FakeWebGlBridge : IWebGlBridge
         AtlasSyncs.Add((commands.ToArray(), transfer.ToArray()));
     }
 
+    public readonly List<(string Vs, string Fs, int[] AttribTriples, int Topology, int Blend, string BlockName)> RegisteredPipelines = new();
+    public readonly List<byte[]?> Buffers = new();
+    public readonly List<(int PipelineId, byte[] Data)> UniformBlocks = new();
+
+    public int RegisterPipeline(int surfaceId, string vertexSource, string fragmentSource,
+        ReadOnlySpan<int> attribTriples, int topology, int blend, string uniformBlockName)
+    {
+        Calls.Add("registerPipeline");
+        RegisteredPipelines.Add((vertexSource, fragmentSource, attribTriples.ToArray(), topology, blend, uniformBlockName));
+        // Ids continue past the fixed table, exactly like the JS shim's pipelines array.
+        return 4 + RegisteredPipelines.Count - 1;
+    }
+
+    public int CreateBuffer(int surfaceId, ReadOnlySpan<byte> data)
+    {
+        Calls.Add("createBuffer");
+        Buffers.Add(data.ToArray());
+        return Buffers.Count - 1;
+    }
+
+    public void UpdateBuffer(int surfaceId, int bufferId, ReadOnlySpan<byte> data)
+    {
+        Calls.Add($"updateBuffer:{bufferId}");
+        Buffers[bufferId] = data.ToArray();
+    }
+
+    public void DestroyBuffer(int surfaceId, int bufferId)
+    {
+        Calls.Add($"destroyBuffer:{bufferId}");
+        Buffers[bufferId] = null;
+    }
+
+    public void SetUniformBlock(int surfaceId, int pipelineId, ReadOnlySpan<byte> data)
+    {
+        Calls.Add($"setUniformBlock:{pipelineId}");
+        UniformBlocks.Add((pipelineId, data.ToArray()));
+    }
+
     public void DisposeContext(int surfaceId) => Calls.Add("dispose");
 }
 

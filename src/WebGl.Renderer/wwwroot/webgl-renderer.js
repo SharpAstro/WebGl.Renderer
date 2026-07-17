@@ -29,6 +29,8 @@ const OP = {
   SetScissor: 10,
   ClearScissor: 11,
   Draw: 12,
+  DrawBuffer: 13,
+  DrawInstanced: 14,
 };
 
 /**
@@ -56,7 +58,13 @@ const ATTRIBS = [
  *             uExtra: WebGLUniformLocation | null,
  *             uTexture: WebGLUniformLocation | null,
  *             floatsPerVertex: number,
- *             attribs: ReadonlyArray<readonly [number, number]> }} Pipeline
+ *             attribs: ReadonlyArray<readonly [number, number]>,
+ *             mode: number,
+ *             blend: number,
+ *             iAttribs: ReadonlyArray<readonly [number, number]> | null,
+ *             iStride: number,
+ *             ubo: WebGLBuffer | null,
+ *             uboBinding: number }} Pipeline
  */
 
 /**
@@ -64,9 +72,11 @@ const ATTRIBS = [
  *             gl: WebGL2RenderingContext,
  *             pipelines: Pipeline[],
  *             pages: (WebGLTexture | null)[],
+ *             buffers: (WebGLBuffer | null)[],
  *             vbo: WebGLBuffer,
  *             proj: Float32Array,
- *             viewportH: number }} Surface
+ *             viewportH: number,
+ *             enabledLocs: Set<number> }} Surface
  */
 
 /** @type {(Surface | null)[]} */
@@ -114,9 +124,11 @@ export function initContext(canvasId) {
     canvas, gl,
     pipelines: [],
     pages: [],
+    buffers: [],
     vbo,
     proj: new Float32Array(16),
     viewportH: canvas.height,
+    enabledLocs: new Set(),
   };
   gl.enable(gl.BLEND);
   // Standard "over" with alpha-preserving alpha channel — mirrors VkPipelineSet's default:
@@ -163,8 +175,124 @@ export function compilePipelines(surfaceId, vertexSources, fragmentSources, floa
       uTexture: gl.getUniformLocation(program, "uTexture"),
       floatsPerVertex: fpv[i],
       attribs: ATTRIBS[i],
+      mode: gl.TRIANGLES,
+      blend: 0,
+      iAttribs: null,
+      iStride: 0,
+      ubo: null,
+      uboBinding: i,
     });
   }
+}
+
+/**
+ * Compile + register one consumer pipeline past the fixed table; returns its id.
+ * attribTriples is the layout flattened as (location, floats, divisor) per attribute:
+ * divisor 0 entries interleave into the per-vertex buffer, divisor 1 into the per-instance
+ * buffer (declaration order, stride = the group's float sum x 4). If the program declares a
+ * uniform block named uniformBlockName, it is bound to binding point = the pipeline id (unique
+ * per pipeline, so concurrent custom UBOs never clobber one binding).
+ * @param {number} surfaceId
+ * @param {string} vertexSource
+ * @param {string} fragmentSource
+ * @param {MemoryViewLike} attribTriples
+ * @param {number} topology  - 0 TRIANGLES | 1 LINES | 2 LINE_STRIP (PipelineTopology wire values)
+ * @param {number} blend     - 0 alpha-over | 1 additive (PipelineBlend wire values)
+ * @param {string} uniformBlockName
+ * @returns {number} pipeline id
+ */
+export function registerPipeline(surfaceId, vertexSource, fragmentSource, attribTriples, topology, blend, uniformBlockName) {
+  const s = surface(surfaceId);
+  const gl = s.gl;
+  const triples = asInt32(attribTriples);
+
+  /** @type {Array<readonly [number, number]>} */
+  const vAttribs = [];
+  /** @type {Array<readonly [number, number]>} */
+  const iAttribs = [];
+  let vFloats = 0, iFloats = 0;
+  for (let t = 0; t + 2 < triples.length; t += 3) {
+    const entry = /** @type {readonly [number, number]} */ ([triples[t], triples[t + 1]]);
+    if (triples[t + 2] === 0) { vAttribs.push(entry); vFloats += triples[t + 1]; }
+    else { iAttribs.push(entry); iFloats += triples[t + 1]; }
+  }
+
+  const program = link(gl, vertexSource, fragmentSource);
+  const id = s.pipelines.length;
+  const blockIndex = gl.getUniformBlockIndex(program, uniformBlockName);
+  if (blockIndex !== gl.INVALID_INDEX) {
+    gl.uniformBlockBinding(program, blockIndex, id);
+  }
+  s.pipelines.push({
+    program,
+    uProj: gl.getUniformLocation(program, "uProj"),
+    uColor: gl.getUniformLocation(program, "uColor"),
+    uExtra: gl.getUniformLocation(program, "uExtra"),
+    uTexture: gl.getUniformLocation(program, "uTexture"),
+    floatsPerVertex: vFloats,
+    attribs: vAttribs,
+    mode: topology === 1 ? gl.LINES : topology === 2 ? gl.LINE_STRIP : gl.TRIANGLES,
+    blend,
+    iAttribs: iAttribs.length > 0 ? iAttribs : null,
+    iStride: iFloats * 4,
+    ubo: null,
+    uboBinding: id,
+  });
+  return id;
+}
+
+/**
+ * Persistent GPU buffer create/update/destroy — geometry uploads once (STATIC_DRAW), draws
+ * reference it across frames via DrawBuffer/DrawInstanced records. Ids are slot indices;
+ * destroyed slots null out (no index shifting — handles stay stable).
+ * @param {number} surfaceId @param {MemoryViewLike} data @returns {number} buffer id
+ */
+export function createBuffer(surfaceId, data) {
+  const s = surface(surfaceId);
+  const gl = s.gl;
+  const buf = gl.createBuffer();
+  if (!buf) throw new Error("webgl-renderer: createBuffer failed");
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, asUint8(data), gl.STATIC_DRAW);
+  s.buffers.push(buf);
+  return s.buffers.length - 1;
+}
+
+/** @param {number} surfaceId @param {number} bufferId @param {MemoryViewLike} data */
+export function updateBuffer(surfaceId, bufferId, data) {
+  const s = surface(surfaceId);
+  const gl = s.gl;
+  const buf = s.buffers[bufferId];
+  if (!buf) throw new Error(`webgl-renderer: unknown buffer ${bufferId}`);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, asUint8(data), gl.STATIC_DRAW);
+}
+
+/** @param {number} surfaceId @param {number} bufferId */
+export function destroyBuffer(surfaceId, bufferId) {
+  const s = surface(surfaceId);
+  const buf = s.buffers[bufferId];
+  if (buf) s.gl.deleteBuffer(buf);
+  s.buffers[bufferId] = null;
+}
+
+/**
+ * Upload a registered pipeline's std140 uniform block (per-frame view state). Lazily creates
+ * the UBO and re-binds it to the pipeline's dedicated binding point.
+ * @param {number} surfaceId @param {number} pipelineId @param {MemoryViewLike} data
+ */
+export function setUniformBlock(surfaceId, pipelineId, data) {
+  const s = surface(surfaceId);
+  const gl = s.gl;
+  const p = s.pipelines[pipelineId];
+  if (!p) throw new Error(`webgl-renderer: unknown pipeline ${pipelineId}`);
+  if (!p.ubo) {
+    p.ubo = gl.createBuffer();
+    if (!p.ubo) throw new Error("webgl-renderer: createBuffer (ubo) failed");
+  }
+  gl.bindBuffer(gl.UNIFORM_BUFFER, p.ubo);
+  gl.bufferData(gl.UNIFORM_BUFFER, asUint8(data), gl.DYNAMIC_DRAW);
+  gl.bindBufferBase(gl.UNIFORM_BUFFER, p.uboBinding, p.ubo);
 }
 
 /**
@@ -216,6 +344,50 @@ function applyPipelineUniforms(s, p) {
   gl.useProgram(p.program);
   if (p.uProj) gl.uniformMatrix4fv(p.uProj, false, s.proj);
   if (p.uTexture) gl.uniform1i(p.uTexture, 0);
+  if (p.blend === 1) {
+    // Additive (premultiplied emissive output, e.g. star glows summing).
+    gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE);
+  } else {
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  }
+}
+
+/**
+ * Point the given attribute group at the CURRENTLY BOUND ARRAY_BUFFER and reconcile enabled
+ * attribute arrays across draws: newly used locations enable, stale ones disable (an enabled
+ * array left pointing at a deleted/foreign buffer is at best wasted state, at worst an
+ * INVALID_OPERATION on a later draw), and every location gets its divisor set EXPLICITLY —
+ * divisors are context-global per location, so an instanced draw would otherwise leak
+ * divisor 1 into the next classic draw that reuses the location.
+ * @param {Surface} s
+ * @param {ReadonlyArray<readonly [number, number]>} attribs - [location, sizeFloats] pairs
+ * @param {number} stride  - bytes
+ * @param {number} base    - byte offset of the first attribute
+ * @param {number} divisor - 0 per-vertex, 1 per-instance
+ * @param {Set<number>} used - accumulates locations set up for the current draw
+ */
+function pointAttribs(s, attribs, stride, base, divisor, used) {
+  const gl = s.gl;
+  let offset = 0;
+  for (const [loc, size] of attribs) {
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, base + offset);
+    gl.vertexAttribDivisor(loc, divisor);
+    s.enabledLocs.add(loc);
+    used.add(loc);
+    offset += size * 4;
+  }
+}
+
+/** @param {Surface} s @param {Set<number>} used */
+function disableStaleAttribs(s, used) {
+  const gl = s.gl;
+  for (const loc of s.enabledLocs) {
+    if (!used.has(loc)) {
+      gl.disableVertexAttribArray(loc);
+      s.enabledLocs.delete(loc);
+    }
+  }
 }
 
 /**
@@ -281,15 +453,41 @@ export function flush(surfaceId, commands, vertexBytes) {
       case OP.Draw: {
         if (!pipeline) throw new Error("webgl-renderer: Draw before UseProgram");
         const firstFloat = cmds[b + 1], count = cmds[b + 2];
-        const stride = pipeline.floatsPerVertex * 4;
-        const base = firstFloat * 4;
-        let attrOffset = 0;
-        for (const [loc, size] of pipeline.attribs) {
-          gl.enableVertexAttribArray(loc);
-          gl.vertexAttribPointer(loc, size, gl.FLOAT, false, stride, base + attrOffset);
-          attrOffset += size * 4;
-        }
+        // Re-bind the per-frame dynamic VBO: a preceding DrawBuffer/DrawInstanced record
+        // leaves its persistent buffer bound to ARRAY_BUFFER.
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
+        const used = new Set();
+        pointAttribs(s, pipeline.attribs, pipeline.floatsPerVertex * 4, firstFloat * 4, 0, used);
+        disableStaleAttribs(s, used);
         gl.drawArrays(gl.TRIANGLES, 0, count);
+        break;
+      }
+      case OP.DrawBuffer: {
+        if (!pipeline) throw new Error("webgl-renderer: DrawBuffer before UseProgram");
+        const buf = s.buffers[cmds[b + 1]];
+        if (!buf) throw new Error(`webgl-renderer: unknown buffer ${cmds[b + 1]}`);
+        const first = cmds[b + 2], count = cmds[b + 3];
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        const used = new Set();
+        pointAttribs(s, pipeline.attribs, pipeline.floatsPerVertex * 4, 0, 0, used);
+        disableStaleAttribs(s, used);
+        gl.drawArrays(pipeline.mode, first, count);
+        break;
+      }
+      case OP.DrawInstanced: {
+        if (!pipeline) throw new Error("webgl-renderer: DrawInstanced before UseProgram");
+        if (!pipeline.iAttribs) throw new Error("webgl-renderer: DrawInstanced on a pipeline without per-instance attributes");
+        const vBuf = s.buffers[cmds[b + 1]];
+        const iBuf = s.buffers[cmds[b + 3]];
+        if (!vBuf || !iBuf) throw new Error("webgl-renderer: unknown buffer in DrawInstanced");
+        const vCount = cmds[b + 2], iCount = cmds[b + 4];
+        const used = new Set();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
+        pointAttribs(s, pipeline.attribs, pipeline.floatsPerVertex * 4, 0, 0, used);
+        gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
+        pointAttribs(s, pipeline.iAttribs, pipeline.iStride, 0, 1, used);
+        disableStaleAttribs(s, used);
+        gl.drawArraysInstanced(pipeline.mode, 0, vCount, iCount);
         break;
       }
       default:
@@ -357,7 +555,11 @@ export function disposeContext(surfaceId) {
   if (!s) return;
   const gl = s.gl;
   for (const t of s.pages) if (t) gl.deleteTexture(t);
-  for (const p of s.pipelines) gl.deleteProgram(p.program);
+  for (const b of s.buffers) if (b) gl.deleteBuffer(b);
+  for (const p of s.pipelines) {
+    gl.deleteProgram(p.program);
+    if (p.ubo) gl.deleteBuffer(p.ubo);
+  }
   gl.deleteBuffer(s.vbo);
   surfaces[surfaceId] = null;
 }

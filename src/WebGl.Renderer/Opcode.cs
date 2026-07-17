@@ -55,6 +55,18 @@ public enum Opcode
     /// would need stride-divisibility invariants. JS sets the bound pipeline's attribute
     /// pointers at that byte offset and drawArrays(TRIANGLES, 0, vertexCount).</summary>
     Draw = 12,
+
+    /// <summary>bufferId, firstVertex, vertexCount (i32). Draws from a PERSISTENT GPU buffer
+    /// (<see cref="WebGlRenderer.CreateBuffer"/>) with the active custom pipeline's per-vertex
+    /// layout and topology — attribute pointers at offset 0, firstVertex passed to drawArrays.
+    /// The per-frame dynamic vertex stream is untouched (geometry uploads once, not per frame).</summary>
+    DrawBuffer = 13,
+
+    /// <summary>vertexBufferId, vertexCount, instanceBufferId, instanceCount (i32).
+    /// gl.drawArraysInstanced with the active custom pipeline's split layout: per-vertex
+    /// attributes from the first persistent buffer (divisor 0), per-instance attributes from
+    /// the second (divisor 1). Both buffers persistent — a pan/zoom re-uploads only the UBO.</summary>
+    DrawInstanced = 14,
 }
 
 /// <summary>

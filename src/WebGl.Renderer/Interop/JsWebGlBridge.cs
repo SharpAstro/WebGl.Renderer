@@ -28,6 +28,22 @@ internal sealed partial class JsWebGlBridge : IWebGlBridge
     public void SyncAtlas(int surfaceId, ReadOnlySpan<int> commands, ReadOnlySpan<byte> transfer)
         => Js.SyncAtlas(surfaceId, commands, transfer);
 
+    public int RegisterPipeline(int surfaceId, string vertexSource, string fragmentSource,
+        ReadOnlySpan<int> attribTriples, int topology, int blend, string uniformBlockName)
+        => Js.RegisterPipeline(surfaceId, vertexSource, fragmentSource,
+            attribTriples, topology, blend, uniformBlockName);
+
+    public int CreateBuffer(int surfaceId, ReadOnlySpan<byte> data)
+        => Js.CreateBuffer(surfaceId, data);
+
+    public void UpdateBuffer(int surfaceId, int bufferId, ReadOnlySpan<byte> data)
+        => Js.UpdateBuffer(surfaceId, bufferId, data);
+
+    public void DestroyBuffer(int surfaceId, int bufferId) => Js.DestroyBuffer(surfaceId, bufferId);
+
+    public void SetUniformBlock(int surfaceId, int pipelineId, ReadOnlySpan<byte> data)
+        => Js.SetUniformBlock(surfaceId, pipelineId, data);
+
     public void DisposeContext(int surfaceId) => Js.DisposeContext(surfaceId);
 
     private static partial class Js
@@ -58,6 +74,27 @@ internal sealed partial class JsWebGlBridge : IWebGlBridge
             [JSMarshalAs<JSType.MemoryView>] Span<int> commands,
             [JSMarshalAs<JSType.MemoryView>] Span<byte> transfer);
 
+        [JSImport("registerPipeline", ModuleName)]
+        public static partial int RegisterPipeline(int surfaceId,
+            string vertexSource, string fragmentSource,
+            [JSMarshalAs<JSType.MemoryView>] Span<int> attribTriples,
+            int topology, int blend, string uniformBlockName);
+
+        [JSImport("createBuffer", ModuleName)]
+        public static partial int CreateBuffer(int surfaceId,
+            [JSMarshalAs<JSType.MemoryView>] Span<byte> data);
+
+        [JSImport("updateBuffer", ModuleName)]
+        public static partial void UpdateBuffer(int surfaceId, int bufferId,
+            [JSMarshalAs<JSType.MemoryView>] Span<byte> data);
+
+        [JSImport("destroyBuffer", ModuleName)]
+        public static partial void DestroyBuffer(int surfaceId, int bufferId);
+
+        [JSImport("setUniformBlock", ModuleName)]
+        public static partial void SetUniformBlock(int surfaceId, int pipelineId,
+            [JSMarshalAs<JSType.MemoryView>] Span<byte> data);
+
         [JSImport("disposeContext", ModuleName)]
         public static partial void DisposeContext(int surfaceId);
 
@@ -72,6 +109,19 @@ internal sealed partial class JsWebGlBridge : IWebGlBridge
 
         public static void SyncAtlas(int surfaceId, ReadOnlySpan<int> commands, ReadOnlySpan<byte> transfer)
             => SyncAtlas(surfaceId, UnsafeAsSpan(commands), UnsafeAsSpan(transfer));
+
+        public static int RegisterPipeline(int surfaceId, string vs, string fs,
+            ReadOnlySpan<int> attribTriples, int topology, int blend, string uniformBlockName)
+            => RegisterPipeline(surfaceId, vs, fs, UnsafeAsSpan(attribTriples), topology, blend, uniformBlockName);
+
+        public static int CreateBuffer(int surfaceId, ReadOnlySpan<byte> data)
+            => CreateBuffer(surfaceId, UnsafeAsSpan(data));
+
+        public static void UpdateBuffer(int surfaceId, int bufferId, ReadOnlySpan<byte> data)
+            => UpdateBuffer(surfaceId, bufferId, UnsafeAsSpan(data));
+
+        public static void SetUniformBlock(int surfaceId, int pipelineId, ReadOnlySpan<byte> data)
+            => SetUniformBlock(surfaceId, pipelineId, UnsafeAsSpan(data));
 
         private static Span<T> UnsafeAsSpan<T>(ReadOnlySpan<T> s)
             => System.Runtime.InteropServices.MemoryMarshal.CreateSpan(
