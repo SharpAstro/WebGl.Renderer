@@ -56,8 +56,15 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
     public static async Task<WebGlRenderer> CreateAsync(string canvasId, uint width, uint height,
         ManagedFontRasterizer? rasterizer = null, SdfGlyphDiskCache? diskCache = null)
     {
+        // Version-stamped import: the path is NOT fingerprinted by Blazor's asset pipeline, so
+        // without the query a browser pairs a CACHED module from a previous package version with
+        // the new assembly (e.g. "registerPipeline must be a Function but was undefined" on a
+        // static host right after a deploy). The informational version changes per package build.
+        var v = Uri.EscapeDataString(typeof(WebGlRenderer).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            is [System.Reflection.AssemblyInformationalVersionAttribute a, ..] ? a.InformationalVersion : "0");
         await System.Runtime.InteropServices.JavaScript.JSHost.ImportAsync(
-            JsWebGlBridge.ModuleName, "../_content/WebGl.Renderer/webgl-renderer.js");
+            JsWebGlBridge.ModuleName, $"../_content/WebGl.Renderer/webgl-renderer.js?v={v}");
         return Create(new JsWebGlBridge(), canvasId, width, height, rasterizer, diskCache);
     }
 

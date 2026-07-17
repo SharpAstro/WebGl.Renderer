@@ -123,8 +123,13 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
         {
             return;
         }
+        // Version-stamped for the same cache-busting reason as WebGlRenderer.CreateAsync's
+        // webgl-renderer.js import (the path is not fingerprinted; see the comment there).
+        var v = Uri.EscapeDataString(typeof(WebGlCanvas).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            is [System.Reflection.AssemblyInformationalVersionAttribute a, ..] ? a.InformationalVersion : "0");
         _module = await JS.InvokeAsync<IJSObjectReference>(
-            "import", "./_content/WebGl.Renderer/webgl-canvas.js");
+            "import", $"./_content/WebGl.Renderer/webgl-canvas.js?v={v}");
         _selfRef = DotNetObjectReference.Create(this);
         await _module.InvokeVoidAsync("attach", _canvasRef, _selfRef, MaxDevicePixelRatio, CapturePointer);
     }
