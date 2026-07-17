@@ -1,0 +1,13 @@
+@* Markup only — all logic lives in WebGlCanvas.razor.cs. No width/height attributes on purpose:
+   webgl-canvas.js owns the backing buffer from the first measurement (see the ownership contract
+   in the code-behind's class doc), and nothing draws before OnReady fires, so there is no
+   flash-of-wrong-size content. touch-action/user-select are inline so consumers don't need a
+   scoped-CSS bundle; display sizing is the consumer's job (via Class / an id-based CSS rule). *@
+<canvas @ref="_canvasRef"
+        id="@Id"
+        tabindex="@TabIndex"
+        class="@Class"
+        style="touch-action:none;user-select:none;-webkit-user-select:none;"
+        @onclick="HandlePointerDownAsync"
+        @onkeydown="HandleKeyDownAsync">
+</canvas>

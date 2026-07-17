@@ -1,14 +1,14 @@
 <!-- Sdk.Razor (not plain Sdk) is load-bearing: it enables the static-web-assets pipeline that
-     ships wwwroot/webgl-renderer.js inside the NuGet package and surfaces it to consuming Blazor
-     apps at _content/WebGl.Renderer/webgl-renderer.js with zero consumer wiring. There are no
-     .razor files in this library — the SDK is used purely for that packaging behavior. -->
+     ships wwwroot/*.js inside the NuGet package and surfaces it to consuming Blazor apps at
+     _content/WebGl.Renderer/*.js with zero consumer wiring, and it compiles the WebGlCanvas
+     Razor component (the reusable hi-dpi canvas host). -->
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionPrefix>1.1.0</VersionPrefix>
     <Description>WebGL2 rendering backend for DIR.Lib's Renderer&lt;TSurface&gt; — Blazor WebAssembly, command-buffer JS interop, MSDF text via the shared SdfFontAtlas core. AOT compatible.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/SharpAstro/WebGl.Renderer</RepositoryUrl>
@@ -45,6 +45,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- ComponentBase/EventCallback/IJSRuntime for the WebGlCanvas component. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
     <PackageReference Include="Microsoft.SourceLink.GitHub">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
