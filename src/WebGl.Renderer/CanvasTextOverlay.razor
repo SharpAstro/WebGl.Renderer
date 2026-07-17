@@ -1,0 +1,14 @@
+@* Markup only — all logic lives in CanvasTextOverlay.razor.cs. The input starts hidden
+   (display:none inline, so there is no flash before the module attaches) and absolutely
+   positioned — the consumer must place this component inside the same position:relative
+   container as the canvas. Visual styling (colors, border, font) comes from Class; the inline
+   style carries only the mechanics. All events are wired JS-side in webgl-text-overlay.js
+   (selective preventDefault + synchronous selection reads need raw DOM listeners). *@
+<input @ref="_inputRef"
+       type="text"
+       class="@Class"
+       spellcheck="false"
+       autocomplete="off"
+       autocapitalize="off"
+       enterkeyhint="search"
+       style="position:absolute;display:none;box-sizing:border-box;z-index:10;" />
