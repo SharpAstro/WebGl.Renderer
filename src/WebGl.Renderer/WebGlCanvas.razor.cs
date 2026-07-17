@@ -24,7 +24,7 @@ namespace WebGl.Renderer;
 /// <c>Resize</c>. For a CPU-backed (2D putImageData) canvas there is no other writer at all, so
 /// this component is authoritative throughout.</para>
 /// </summary>
-public sealed partial class WebGlCanvas : ComponentBase, IAsyncDisposable
+public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDisposable
 {
     /// <summary>The canvas element's DOM id — also what the parent passes to
     /// <see cref="WebGlRenderer.CreateAsync"/> / any other id-based JS interop on this element.</summary>
@@ -58,14 +58,44 @@ public sealed partial class WebGlCanvas : ComponentBase, IAsyncDisposable
     [Parameter]
     public EventCallback<CanvasMetrics> OnResized { get; set; }
 
-    /// <summary>A click/tap, coordinates already mapped to backing-buffer space
-    /// (CSS offset × devicePixelRatio) — feed straight into pixel-space hit-testing.</summary>
+    /// <summary>A primary-surface press (bound to <c>mousedown</c> since 1.2 — 1.1 bound
+    /// <c>click</c>, which fires on release and cannot start a drag; consumers that want
+    /// click/release semantics use <see cref="OnPointerUp"/>). Coordinates already mapped to
+    /// backing-buffer space (CSS offset × devicePixelRatio) — feed straight into pixel-space
+    /// hit-testing. <c>Original.Detail</c> carries the click count (the reason these are the
+    /// compatibility mouse events, not pointer events, whose <c>detail</c> is spec'd 0).</summary>
     [Parameter]
     public EventCallback<CanvasPointerEventArgs> OnPointerDown { get; set; }
+
+    /// <summary>Pointer motion, backing-space mapped like <see cref="OnPointerDown"/>. With
+    /// <see cref="CapturePointer"/> (default) a drag keeps reporting after the pointer leaves
+    /// the canvas — coordinates can then be negative / beyond the backing size; clamp consumer-side.</summary>
+    [Parameter]
+    public EventCallback<CanvasPointerEventArgs> OnPointerMove { get; set; }
+
+    /// <summary>Pointer release, backing-space mapped like <see cref="OnPointerDown"/>.</summary>
+    [Parameter]
+    public EventCallback<CanvasPointerEventArgs> OnPointerUp { get; set; }
+
+    /// <summary>Wheel scroll at a backing-space position; deltas forwarded raw (see
+    /// <see cref="CanvasWheelEventArgs"/>).</summary>
+    [Parameter]
+    public EventCallback<CanvasWheelEventArgs> OnWheel { get; set; }
 
     /// <summary>Forwarded verbatim — no coordinate mapping applies to key events.</summary>
     [Parameter]
     public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
+
+    /// <summary>Captures the pointer on a primary-button press (<c>setPointerCapture</c> in
+    /// webgl-canvas.js), so mousemove/mouseup keep retargeting to the canvas after the pointer
+    /// leaves it — the SDL mouse-capture analogue drags need. Release is implicit on pointerup.</summary>
+    [Parameter]
+    public bool CapturePointer { get; set; } = true;
+
+    /// <summary>Focuses the canvas after the first metrics report, so keyboard input works
+    /// without a click first (pair with a non-negative <see cref="TabIndex"/>).</summary>
+    [Parameter]
+    public bool AutoFocus { get; set; }
 
     [Inject]
     private IJSRuntime JS { get; set; } = default!;
@@ -96,7 +126,7 @@ public sealed partial class WebGlCanvas : ComponentBase, IAsyncDisposable
         _module = await JS.InvokeAsync<IJSObjectReference>(
             "import", "./_content/WebGl.Renderer/webgl-canvas.js");
         _selfRef = DotNetObjectReference.Create(this);
-        await _module.InvokeVoidAsync("attach", _canvasRef, _selfRef, MaxDevicePixelRatio);
+        await _module.InvokeVoidAsync("attach", _canvasRef, _selfRef, MaxDevicePixelRatio, CapturePointer);
     }
 
     /// <summary>
@@ -106,7 +136,7 @@ public sealed partial class WebGlCanvas : ComponentBase, IAsyncDisposable
     /// deserialization of a custom type (trim/AOT-safe without a JsonSerializerContext).
     /// </summary>
     [JSInvokable]
-    public Task OnCanvasMetricsAsync(
+    public async Task OnCanvasMetricsAsync(
         double backingWidth, double backingHeight, double cssWidth, double cssHeight, double devicePixelRatio)
     {
         var metrics = new CanvasMetrics(
@@ -116,24 +146,53 @@ public sealed partial class WebGlCanvas : ComponentBase, IAsyncDisposable
 
         if (_ready && metrics == _metrics)
         {
-            return Task.CompletedTask; // e.g. a scroll-induced ResizeObserver tick with no real change
+            return; // e.g. a scroll-induced ResizeObserver tick with no real change
         }
         var isFirst = !_ready;
         _metrics = metrics;
         _ready = true;
-        return (isFirst ? OnReady : OnResized).InvokeAsync(metrics);
+        if (isFirst && AutoFocus)
+        {
+            await _canvasRef.FocusAsync();
+        }
+        await (isFirst ? OnReady : OnResized).InvokeAsync(metrics);
     }
 
-    private Task HandlePointerDownAsync(MouseEventArgs e)
+    // Blazor reports OffsetX/Y in CSS pixels; hit-testing happens in backing-buffer space.
+    // Shared by down/move/up/wheel so every callback agrees on the mapping.
+    private CanvasPointerEventArgs MapToBacking(MouseEventArgs e)
     {
-        // Blazor reports OffsetX/Y in CSS pixels; hit-testing happens in backing-buffer space.
         var dpr = _metrics.DevicePixelRatio > 0 ? _metrics.DevicePixelRatio : 1;
-        var x = (int)Math.Round(e.OffsetX * dpr);
-        var y = (int)Math.Round(e.OffsetY * dpr);
-        return OnPointerDown.InvokeAsync(new CanvasPointerEventArgs(x, y, e));
+        return new CanvasPointerEventArgs((int)Math.Round(e.OffsetX * dpr), (int)Math.Round(e.OffsetY * dpr), e);
+    }
+
+    private Task HandlePointerDownAsync(MouseEventArgs e) => OnPointerDown.InvokeAsync(MapToBacking(e));
+
+    private Task HandlePointerMoveAsync(MouseEventArgs e)
+        => OnPointerMove.HasDelegate ? OnPointerMove.InvokeAsync(MapToBacking(e)) : Task.CompletedTask;
+
+    private Task HandlePointerUpAsync(MouseEventArgs e)
+        => OnPointerUp.HasDelegate ? OnPointerUp.InvokeAsync(MapToBacking(e)) : Task.CompletedTask;
+
+    private Task HandleWheelAsync(WheelEventArgs e)
+    {
+        if (!OnWheel.HasDelegate)
+        {
+            return Task.CompletedTask;
+        }
+        var p = MapToBacking(e);
+        return OnWheel.InvokeAsync(new CanvasWheelEventArgs(p.X, p.Y, e.DeltaY, e.DeltaMode, e));
     }
 
     private Task HandleKeyDownAsync(KeyboardEventArgs e) => OnKeyDown.InvokeAsync(e);
+
+    /// <summary>
+    /// Suppresses ComponentBase's render-after-every-DOM-event: this component's markup is a
+    /// single attribute-stable canvas element, so re-rendering it per mousemove is pure waste
+    /// on what is typically a render-loop-driven surface. Consumers' own re-render behaviour is
+    /// untouched (EventCallback notifies the receiver, not this component).
+    /// </summary>
+    Task IHandleEvent.HandleEventAsync(EventCallbackWorkItem callback, object? arg) => callback.InvokeAsync(arg);
 
     public async ValueTask DisposeAsync()
     {

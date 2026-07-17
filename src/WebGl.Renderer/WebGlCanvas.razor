@@ -8,6 +8,9 @@
         tabindex="@TabIndex"
         class="@Class"
         style="touch-action:none;user-select:none;-webkit-user-select:none;"
-        @onclick="HandlePointerDownAsync"
+        @onmousedown="HandlePointerDownAsync"
+        @onmousemove="HandlePointerMoveAsync"
+        @onmouseup="HandlePointerUpAsync"
+        @onwheel="HandleWheelAsync"
         @onkeydown="HandleKeyDownAsync">
 </canvas>

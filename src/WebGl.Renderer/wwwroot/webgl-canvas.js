@@ -24,6 +24,7 @@
  * @property {MediaQueryList | null} mql
  * @property {() => void} onDprChange
  * @property {number} raf
+ * @property {((e: PointerEvent) => void) | null} onPointerDown - capture-on-press listener (null when CapturePointer=false)
  */
 
 /** @type {WeakMap<HTMLCanvasElement, Attachment>} */
@@ -35,8 +36,12 @@ const attachments = new WeakMap();
  * @param {HTMLCanvasElement} canvas
  * @param {DotNetRef} dotNetRef
  * @param {number} maxDevicePixelRatio
+ * @param {boolean} capturePointer - capture the pointer on a primary-button press, so the
+ *        compatibility mousemove/mouseup keep retargeting to the canvas after the pointer
+ *        leaves it (drags survive; the SDL mouse-capture analogue). Release is implicit on
+ *        pointerup.
  */
-export function attach(canvas, dotNetRef, maxDevicePixelRatio) {
+export function attach(canvas, dotNetRef, maxDevicePixelRatio, capturePointer) {
   const cap = maxDevicePixelRatio > 0 ? maxDevicePixelRatio : 3;
 
   const report = () => {
@@ -75,7 +80,17 @@ export function attach(canvas, dotNetRef, maxDevicePixelRatio) {
     mql: null,
     onDprChange: () => { report().then(armDprWatch); },
     raf: 0,
+    onPointerDown: null,
   };
+
+  if (capturePointer) {
+    state.onPointerDown = (e) => {
+      if (e.button === 0 && canvas.setPointerCapture) {
+        try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone (e.g. pen lift) */ }
+      }
+    };
+    canvas.addEventListener("pointerdown", state.onPointerDown);
+  }
 
   state.ro.observe(canvas);
   attachments.set(canvas, state);
@@ -91,6 +106,7 @@ export function detach(canvas) {
   if (!state) return;
   state.ro.disconnect();
   state.mql?.removeEventListener("change", state.onDprChange);
+  if (state.onPointerDown) canvas.removeEventListener("pointerdown", state.onPointerDown);
   cancelAnimationFrame(state.raf);
   attachments.delete(canvas);
 }
