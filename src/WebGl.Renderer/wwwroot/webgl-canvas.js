@@ -30,6 +30,7 @@
  * @property {((e: TouchEvent) => void) | null} onTouchStart
  * @property {((e: TouchEvent) => void) | null} onTouchMove
  * @property {((e: TouchEvent) => void) | null} onTouchEnd
+ * @property {() => void} onFsChange - immediate re-measure on Fullscreen API transitions
  */
 
 /** @type {WeakMap<HTMLCanvasElement, Attachment>} */
@@ -91,7 +92,14 @@ export function attach(canvas, dotNetRef, maxDevicePixelRatio, capturePointer) {
     onTouchStart: null,
     onTouchMove: null,
     onTouchEnd: null,
+    // Fullscreen API transitions (element.requestFullscreen / Esc) re-lay-out the page; the
+    // ResizeObserver above WILL catch that, but only on its next rAF-coalesced tick, which can leave
+    // a visibly stale/letterboxed frame during the transition. Re-measure immediately instead.
+    // (Plain F11 is browser-reserved: it fires no fullscreenchange and needs no handling here -- it
+    // just resizes the viewport, which the ResizeObserver already handles like any window resize.)
+    onFsChange: () => { report().then(armDprWatch); },
   };
+  document.addEventListener("fullscreenchange", state.onFsChange);
 
   if (capturePointer) {
     state.onPointerDown = (e) => {
@@ -176,6 +184,28 @@ export function attach(canvas, dotNetRef, maxDevicePixelRatio, capturePointer) {
 }
 
 /**
+ * Toggles Fullscreen-API fullscreen for the canvas's PARENT element (the position:relative host
+ * container that also anchors any DOM overlays -- fullscreening the wrapper keeps those overlays
+ * anchored and avoids the replaced-element letterboxing a bare <canvas> fullscreen target gets
+ * from the UA :fullscreen object-fit rules). Returns true when now fullscreen.
+ * @param {HTMLCanvasElement} canvas
+ * @returns {Promise<boolean>}
+ */
+export async function toggleFullscreen(canvas) {
+  if (document.fullscreenElement) {
+    await document.exitFullscreen().catch(() => { /* already exited */ });
+    return false;
+  }
+  const target = canvas.parentElement ?? canvas;
+  try {
+    await target.requestFullscreen();
+    return true;
+  } catch {
+    return false; // denied (no user gesture / iframe policy) -- caller stays windowed
+  }
+}
+
+/**
  * Stops observing the canvas and drops all listeners. Safe to call on an already-detached canvas.
  * @param {HTMLCanvasElement} canvas
  */
@@ -184,6 +214,7 @@ export function detach(canvas) {
   if (!state) return;
   state.ro.disconnect();
   state.mql?.removeEventListener("change", state.onDprChange);
+  document.removeEventListener("fullscreenchange", state.onFsChange);
   if (state.onPointerDown) canvas.removeEventListener("pointerdown", state.onPointerDown);
   if (state.onTouchStart) {
     canvas.removeEventListener("touchstart", state.onTouchStart);

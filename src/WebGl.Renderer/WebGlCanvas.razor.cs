@@ -125,6 +125,20 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
     /// <summary>Focuses the canvas (e.g. so keyboard input works without a click first).</summary>
     public ValueTask FocusAsync() => _canvasRef.FocusAsync();
 
+    /// <summary>
+    /// Toggles Fullscreen-API fullscreen for the canvas's parent container (the position:relative
+    /// host that also anchors DOM overlays, so they stay working in fullscreen; fullscreening the
+    /// bare canvas would letterbox via the UA :fullscreen object-fit rules). The attach()-installed
+    /// fullscreenchange listener re-measures immediately, so the backing buffer snaps to the new
+    /// viewport with no stale frame. Returns true when now fullscreen; false after exit OR when the
+    /// browser denied the request (no user gesture). Must be called from a user gesture (click/key).
+    /// Note: plain F11 is browser-reserved and never observable by the page -- a consumer that wants
+    /// an edge-to-edge mode must offer its own button/shortcut calling this.
+    /// </summary>
+    public async ValueTask<bool> ToggleFullscreenAsync()
+        => _module is not null
+            && await _module.InvokeAsync<bool>("toggleFullscreen", _canvasRef);
+
     // DynamicDependency: OnCanvasMetricsAsync is only reached via JS interop reflection
     // (DotNetObjectReference.invokeMethodAsync), invisible to the trimmer's static analysis.
     // Anchoring it to OnAfterRenderAsync — the method that hands the reference to JS — keeps it

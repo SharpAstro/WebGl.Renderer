@@ -1,0 +1,18 @@
+@namespace WebGl.Renderer
+
+@* Read-only, natively-selectable text runs floated over the canvas -- the retained-layer sibling of
+   CanvasTextOverlay (which is a single focusable <input> for EDITABLE text). Absolutely positioned:
+   the consumer must place this component inside the same position:relative container as the canvas,
+   and pass rects/font sizes in CSS px (backing-buffer px / DevicePixelRatio -- the same convention
+   as CanvasTextOverlay). The layer itself swallows no input (pointer-events:none), so canvas
+   drags/clicks pass through everywhere except directly over a text run, where pointer events
+   re-enable so the browser's native selection/copy works. *@
+@if (Runs is { Count: > 0 })
+{
+    <div class="@Class" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:5;">
+        @foreach (var run in Runs)
+        {
+            <div style="@RunStyle(run)">@run.Text</div>
+        }
+    </div>
+}
