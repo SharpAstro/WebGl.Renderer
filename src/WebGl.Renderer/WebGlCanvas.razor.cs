@@ -86,6 +86,19 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
     [Parameter]
     public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
 
+    /// <summary>A two-finger pinch (touchscreen). Fires per <c>touchmove</c> while two fingers are
+    /// down; see <see cref="CanvasPinchEventArgs"/> for the relative-scale + backing-space-midpoint
+    /// contract. SINGLE-finger touch is delivered through the normal <see cref="OnPointerDown"/> /
+    /// <see cref="OnPointerMove"/> / <see cref="OnPointerUp"/> callbacks (a synthesized left-button
+    /// press), so a consumer that already handles mouse drag gets touch pan for free — this fires only
+    /// for the two-finger gesture.</summary>
+    [Parameter]
+    public EventCallback<CanvasPinchEventArgs> OnPinch { get; set; }
+
+    /// <summary>Fires once when a pinch ends — a finger lifts and the count drops below two.</summary>
+    [Parameter]
+    public EventCallback OnPinchEnd { get; set; }
+
     /// <summary>Captures the pointer on a primary-button press (<c>setPointerCapture</c> in
     /// webgl-canvas.js), so mousemove/mouseup keep retargeting to the canvas after the pointer
     /// leaves it — the SDL mouse-capture analogue drags need. Release is implicit on pointerup.</summary>
@@ -117,6 +130,11 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
     // Anchoring it to OnAfterRenderAsync — the method that hands the reference to JS — keeps it
     // alive for consumers that don't root this assembly with TrimmerRootAssembly.
     [DynamicDependency(nameof(OnCanvasMetricsAsync))]
+    [DynamicDependency(nameof(OnTouchPointerDownAsync))]
+    [DynamicDependency(nameof(OnTouchPointerMoveAsync))]
+    [DynamicDependency(nameof(OnTouchPointerUpAsync))]
+    [DynamicDependency(nameof(OnTouchPinchAsync))]
+    [DynamicDependency(nameof(OnTouchPinchEndAsync))]
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
@@ -190,6 +208,51 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
     }
 
     private Task HandleKeyDownAsync(KeyboardEventArgs e) => OnKeyDown.InvokeAsync(e);
+
+    // ── Touch → pointer/pinch bridge (JSInvokable, called from webgl-canvas.js) ──
+    // touch-action:none (set on the canvas so the page doesn't scroll/zoom under the fingers) ALSO
+    // suppresses the browser's compatibility mouse events, so the @onmouse* bindings never fire for a
+    // finger. webgl-canvas.js listens for raw touch events and calls these: a SINGLE finger maps to the
+    // same pointer callbacks the mouse uses (so a consumer handling mouse drag gets touch pan/tap for
+    // free), TWO fingers drive OnPinch/OnPinchEnd. Coordinates arrive ALREADY mapped to backing space
+    // (getBoundingClientRect + devicePixelRatio, JS-side), so no MapToBacking hop here.
+
+    // A finger is a no-modifier left-button, single-click press: the pointer callbacks expose Original
+    // for Button/Detail/modifiers, and this is what a tap looks like to a mouse-shaped consumer.
+    private static MouseEventArgs TouchMouseArgs() => new() { Button = 0, Detail = 1 };
+
+    /// <summary>JS bridge: a single finger pressed — maps to <see cref="OnPointerDown"/>.</summary>
+    [JSInvokable]
+    public Task OnTouchPointerDownAsync(double x, double y)
+        => OnPointerDown.HasDelegate
+            ? OnPointerDown.InvokeAsync(new CanvasPointerEventArgs((int)x, (int)y, TouchMouseArgs()))
+            : Task.CompletedTask;
+
+    /// <summary>JS bridge: the single finger moved — maps to <see cref="OnPointerMove"/>.</summary>
+    [JSInvokable]
+    public Task OnTouchPointerMoveAsync(double x, double y)
+        => OnPointerMove.HasDelegate
+            ? OnPointerMove.InvokeAsync(new CanvasPointerEventArgs((int)x, (int)y, TouchMouseArgs()))
+            : Task.CompletedTask;
+
+    /// <summary>JS bridge: the single finger lifted — maps to <see cref="OnPointerUp"/>.</summary>
+    [JSInvokable]
+    public Task OnTouchPointerUpAsync(double x, double y)
+        => OnPointerUp.HasDelegate
+            ? OnPointerUp.InvokeAsync(new CanvasPointerEventArgs((int)x, (int)y, TouchMouseArgs()))
+            : Task.CompletedTask;
+
+    /// <summary>JS bridge: a two-finger pinch step — maps to <see cref="OnPinch"/>.</summary>
+    [JSInvokable]
+    public Task OnTouchPinchAsync(double scale, double x, double y)
+        => OnPinch.HasDelegate
+            ? OnPinch.InvokeAsync(new CanvasPinchEventArgs(scale, (int)x, (int)y))
+            : Task.CompletedTask;
+
+    /// <summary>JS bridge: the pinch ended — maps to <see cref="OnPinchEnd"/>.</summary>
+    [JSInvokable]
+    public Task OnTouchPinchEndAsync()
+        => OnPinchEnd.HasDelegate ? OnPinchEnd.InvokeAsync() : Task.CompletedTask;
 
     /// <summary>
     /// Suppresses ComponentBase's render-after-every-DOM-event: this component's markup is a

@@ -25,6 +25,11 @@
  * @property {() => void} onDprChange
  * @property {number} raf
  * @property {((e: PointerEvent) => void) | null} onPointerDown - capture-on-press listener (null when CapturePointer=false)
+ * @property {"none" | "pan" | "pinch" | "ended"} touchMode - current touch gesture
+ * @property {number} pinchLastDist - inter-finger distance at the previous pinch step (px)
+ * @property {((e: TouchEvent) => void) | null} onTouchStart
+ * @property {((e: TouchEvent) => void) | null} onTouchMove
+ * @property {((e: TouchEvent) => void) | null} onTouchEnd
  */
 
 /** @type {WeakMap<HTMLCanvasElement, Attachment>} */
@@ -81,6 +86,11 @@ export function attach(canvas, dotNetRef, maxDevicePixelRatio, capturePointer) {
     onDprChange: () => { report().then(armDprWatch); },
     raf: 0,
     onPointerDown: null,
+    touchMode: "none",
+    pinchLastDist: 0,
+    onTouchStart: null,
+    onTouchMove: null,
+    onTouchEnd: null,
   };
 
   if (capturePointer) {
@@ -91,6 +101,74 @@ export function attach(canvas, dotNetRef, maxDevicePixelRatio, capturePointer) {
     };
     canvas.addEventListener("pointerdown", state.onPointerDown);
   }
+
+  // ── Touch -> pointer/pinch bridge ──────────────────────────────────────────
+  // touch-action:none (on the canvas) stops the page scrolling/zooming under the fingers, but it ALSO
+  // suppresses the compatibility mouse events, so the Blazor @onmouse* bindings never fire for touch.
+  // Bridge raw touch here: ONE finger drives the SAME pointer callbacks the mouse uses (pan/tap for
+  // free), TWO fingers drive a relative-scale pinch (the SDL touch convention the sky-map consumer
+  // expects: OnTouchPinch scale = current-distance / previous-distance, anchored at the finger
+  // midpoint). All coordinates are mapped to backing space (getBoundingClientRect + reported dpr) so
+  // the .NET side needs no further scaling.
+  const invoke = (m, ...a) => dotNetRef.invokeMethodAsync(m, ...a).catch(() => { /* teardown race */ });
+  const backing = (clientX, clientY) => {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = state.lastDpr || 1;
+    return [(clientX - rect.left) * dpr, (clientY - rect.top) * dpr];
+  };
+  const fingerDist = (ts) => Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY);
+  const fingerMid = (ts) => backing((ts[0].clientX + ts[1].clientX) / 2, (ts[0].clientY + ts[1].clientY) / 2);
+
+  state.onTouchStart = (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      state.touchMode = "pan";
+      const [x, y] = backing(e.touches[0].clientX, e.touches[0].clientY);
+      invoke("OnTouchPointerDownAsync", x, y);
+    } else if (e.touches.length >= 2) {
+      // Second finger: start a pinch. The sky-map handler undoes any pan the first finger began, so we
+      // don't send a pointer-up. Baseline the distance so the first move reports a ~1 relative step.
+      state.touchMode = "pinch";
+      state.pinchLastDist = fingerDist(e.touches);
+    }
+  };
+
+  state.onTouchMove = (e) => {
+    e.preventDefault();
+    if (state.touchMode === "pan" && e.touches.length === 1) {
+      const [x, y] = backing(e.touches[0].clientX, e.touches[0].clientY);
+      invoke("OnTouchPointerMoveAsync", x, y);
+    } else if (state.touchMode === "pinch" && e.touches.length >= 2) {
+      const dist = fingerDist(e.touches);
+      if (state.pinchLastDist > 0) {
+        const [mx, my] = fingerMid(e.touches);
+        invoke("OnTouchPinchAsync", dist / state.pinchLastDist, mx, my);
+      }
+      state.pinchLastDist = dist;
+    }
+  };
+
+  // Shared by touchend + touchcancel.
+  state.onTouchEnd = (e) => {
+    e.preventDefault();
+    if (state.touchMode === "pinch" && e.touches.length < 2) {
+      invoke("OnTouchPinchEndAsync");
+      // A finger may remain (2 -> 1); do NOT resume pan mid-gesture (it would jump). Wait for all up.
+      state.touchMode = e.touches.length === 0 ? "none" : "ended";
+    } else if (state.touchMode === "pan" && e.touches.length === 0) {
+      const t = e.changedTouches[0];
+      const [x, y] = t ? backing(t.clientX, t.clientY) : [0, 0];
+      invoke("OnTouchPointerUpAsync", x, y);
+      state.touchMode = "none";
+    } else if (e.touches.length === 0) {
+      state.touchMode = "none";
+    }
+  };
+
+  canvas.addEventListener("touchstart", state.onTouchStart, { passive: false });
+  canvas.addEventListener("touchmove", state.onTouchMove, { passive: false });
+  canvas.addEventListener("touchend", state.onTouchEnd, { passive: false });
+  canvas.addEventListener("touchcancel", state.onTouchEnd, { passive: false });
 
   state.ro.observe(canvas);
   attachments.set(canvas, state);
@@ -107,6 +185,12 @@ export function detach(canvas) {
   state.ro.disconnect();
   state.mql?.removeEventListener("change", state.onDprChange);
   if (state.onPointerDown) canvas.removeEventListener("pointerdown", state.onPointerDown);
+  if (state.onTouchStart) {
+    canvas.removeEventListener("touchstart", state.onTouchStart);
+    canvas.removeEventListener("touchmove", state.onTouchMove);
+    canvas.removeEventListener("touchend", state.onTouchEnd);
+    canvas.removeEventListener("touchcancel", state.onTouchEnd);
+  }
   cancelAnimationFrame(state.raf);
   attachments.delete(canvas);
 }
