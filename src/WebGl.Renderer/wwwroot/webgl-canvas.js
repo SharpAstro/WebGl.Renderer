@@ -55,8 +55,15 @@ export function attach(canvas, dotNetRef, maxDevicePixelRatio, capturePointer) {
     const dpr = Math.min(window.devicePixelRatio || 1, cap);
     const backingWidth = Math.max(1, Math.round(rect.width * dpr));
     const backingHeight = Math.max(1, Math.round(rect.height * dpr));
-    canvas.width = backingWidth;
-    canvas.height = backingHeight;
+    // Assign canvas.width/height ONLY on a real change. Writing either attribute -- even to its
+    // current value -- resets the drawing buffer (clears it to transparent black) per the HTML spec.
+    // The .NET OnCanvasMetricsAsync dedupes identical metrics and skips the repaint, so an
+    // unconditional assign on a redundant ResizeObserver tick (e.g. the settling ticks an F11
+    // fullscreen transition emits, which round to the same backing size) would blank the canvas with
+    // no repaint to follow -- the F11 "black band". Guarding the assign keeps the last frame intact
+    // when nothing changed; a genuine resize still clears + repaints via OnResized below.
+    if (canvas.width !== backingWidth) canvas.width = backingWidth;
+    if (canvas.height !== backingHeight) canvas.height = backingHeight;
     state.lastDpr = dpr;
     return dotNetRef
       .invokeMethodAsync("OnCanvasMetricsAsync", backingWidth, backingHeight, rect.width, rect.height, dpr)

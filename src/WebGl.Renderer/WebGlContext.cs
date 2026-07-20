@@ -27,6 +27,11 @@ public sealed class WebGlContext
     public uint Width { get; private set; }
     public uint Height { get; private set; }
 
+    // Set by Resize() when the surface size changes; consumed (re-emitted as a SetViewport command)
+    // by the NEXT BeginFrame(). See the Resize/BeginFrame comments for why the viewport can't be
+    // emitted from Resize() directly.
+    private bool _viewportDirty;
+
     // Per-frame draw stream, reset by BeginFrame(). Ints and floats grow independently;
     // Draw records index the vertex stream in vertex units.
     internal readonly List<int> Commands = new(capacity: 64 * SlotsPerRecord);
@@ -53,6 +58,18 @@ public sealed class WebGlContext
     {
         Commands.Clear();
         Vertices.Clear();
+        // Re-emit the viewport as the FIRST command of a frame after a resize. Resize() cannot emit it
+        // directly: the consumer's documented pattern is Resize() then a render pass that opens with
+        // Clear(), and Clear() -> BeginFrame() resets the command stream, which would discard a
+        // viewport command emitted by Resize() -- leaving gl.viewport + projection at the old size
+        // while the drawing buffer grew (content renders through a stale viewport: the F11 "black
+        // band"). Emitting HERE, after the reset, guarantees it survives to Present(). GL viewport
+        // state is sticky across frames, so this only fires when the size actually changed.
+        if (_viewportDirty)
+        {
+            Emit(Opcode.SetViewport, [(int)Width, (int)Height]);
+            _viewportDirty = false;
+        }
     }
 
     internal void ClearAtlasStream()
@@ -63,8 +80,10 @@ public sealed class WebGlContext
 
     internal void Resize(uint width, uint height)
     {
+        if (Width == width && Height == height) return;
         Width = width;
         Height = height;
+        _viewportDirty = true;
     }
 
     /// <summary>Append one fixed-stride command record to the draw stream. Missing slots pad with 0.</summary>

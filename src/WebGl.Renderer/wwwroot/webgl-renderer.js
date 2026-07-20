@@ -415,8 +415,12 @@ export function flush(surfaceId, commands, vertexBytes) {
     switch (cmds[b]) {
       case OP.SetViewport: {
         const w = cmds[b + 1], h = cmds[b + 2];
-        s.canvas.width = w;
-        s.canvas.height = h;
+        // Assigning canvas.width/height resets the drawing buffer (HTML spec), so only touch it on a
+        // real change -- webgl-canvas.js's report() usually already sized the backing buffer to the
+        // same value, and re-assigning would needlessly clear it. gl.viewport/projection are re-set
+        // unconditionally (cheap, and required after a buffer reset).
+        if (s.canvas.width !== w) s.canvas.width = w;
+        if (s.canvas.height !== h) s.canvas.height = h;
         setViewport(s, w, h);
         if (pipeline) applyPipelineUniforms(s, pipeline); // re-push the rebuilt projection
         break;

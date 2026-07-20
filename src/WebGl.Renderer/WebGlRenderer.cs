@@ -121,8 +121,10 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
 
     public override void Resize(uint width, uint height)
     {
+        // Only marks the surface size dirty; the SetViewport command is (re)emitted by the next
+        // Surface.BeginFrame(). Emitting it here would be discarded by the Clear() -> BeginFrame()
+        // that opens the render pass the consumer runs right after Resize() -- see WebGlContext.
         Surface.Resize(width, height);
-        Surface.Emit(Opcode.SetViewport, [(int)width, (int)height]);
     }
 
     public override void Dispose()
