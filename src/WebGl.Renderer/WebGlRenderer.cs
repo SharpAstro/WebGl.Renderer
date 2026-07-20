@@ -232,15 +232,83 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
         EnsurePipeline(PipelineId.Stroke);
         EnsureColor(color);
         Surface.Emit(Opcode.SetExtra, [WebGlContext.F(thickness / 2f)]);
-        // 6 verts × (P0, P1, params(side, end)); the VS does pos = mix(P0,P1,end) + normal*side*halfWidth.
         Span<float> v = stackalloc float[36];
+        WriteStrokeSegment(v, x0, y0, x1, y1);
+        EmitDraw(v, 6);
+    }
+
+    /// <summary>Batched polyline: every segment's 6 stroke vertices go into ONE vertex run + one
+    /// <see cref="Opcode.Draw"/> (Stroke pipeline), instead of the base class's one-DrawLine-per-segment
+    /// loop (N segments = N gl.drawArrays + N attribute rebinds). Geometry is byte-identical to calling
+    /// <see cref="DrawLine"/> per consecutive pair; thickness (the Stroke halfWidth uniform) is uniform
+    /// across the run, so it is set once. Mirrors the run-batching in <see cref="FillRectangles"/>.</summary>
+    public override void DrawPolyline(ReadOnlySpan<(float X, float Y)> points, RGBAColor32 color, int thickness = 1)
+    {
+        if (points.Length < 2) return;
+        EnsurePipeline(PipelineId.Stroke);
+        EnsureColor(color);
+        Surface.Emit(Opcode.SetExtra, [WebGlContext.F(thickness / 2f)]);
+
+        var firstFloat = Surface.Vertices.Count;
+        Span<float> seg = stackalloc float[36];
+        var vertexCount = 0;
+        for (var i = 1; i < points.Length; i++)
+        {
+            WriteStrokeSegment(seg, points[i - 1].X, points[i - 1].Y, points[i].X, points[i].Y);
+            Surface.AppendVertices(seg);
+            vertexCount += 6;
+        }
+        if (vertexCount > 0)
+            Surface.Emit(Opcode.Draw, [firstFloat, vertexCount]);
+    }
+
+    /// <summary>Batched dashed polyline: every visible dash across every segment goes into ONE vertex
+    /// run + one <see cref="Opcode.Draw"/>. Dash pattern resets at each vertex (no phase continuity),
+    /// matching the base <c>DrawLineDashed</c> semantics. Degrades to <see cref="DrawPolyline"/> when
+    /// either length is non-positive.</summary>
+    public override void DrawPolylineDashed(ReadOnlySpan<(float X, float Y)> points, RGBAColor32 color,
+        float dashLength, float gapLength, int thickness = 1)
+    {
+        if (points.Length < 2) return;
+        if (dashLength <= 0f || gapLength <= 0f) { DrawPolyline(points, color, thickness); return; }
+        EnsurePipeline(PipelineId.Stroke);
+        EnsureColor(color);
+        Surface.Emit(Opcode.SetExtra, [WebGlContext.F(thickness / 2f)]);
+
+        var firstFloat = Surface.Vertices.Count;
+        Span<float> seg = stackalloc float[36];
+        var vertexCount = 0;
+        var period = dashLength + gapLength;
+        for (var i = 1; i < points.Length; i++)
+        {
+            float x0 = points[i - 1].X, y0 = points[i - 1].Y;
+            var dx = points[i].X - x0;
+            var dy = points[i].Y - y0;
+            var len = MathF.Sqrt(dx * dx + dy * dy);
+            if (len <= 0f) continue;
+            var ux = dx / len;
+            var uy = dy / len;
+            for (var t = 0f; t < len; t += period)
+            {
+                var dashEnd = MathF.Min(t + dashLength, len);
+                WriteStrokeSegment(seg, x0 + ux * t, y0 + uy * t, x0 + ux * dashEnd, y0 + uy * dashEnd);
+                Surface.AppendVertices(seg);
+                vertexCount += 6;
+            }
+        }
+        if (vertexCount > 0)
+            Surface.Emit(Opcode.Draw, [firstFloat, vertexCount]);
+    }
+
+    // 6 verts × (P0, P1, params(side, end)); the VS does pos = mix(P0,P1,end) + normal*side*halfWidth.
+    private static void WriteStrokeSegment(Span<float> v, float x0, float y0, float x1, float y1)
+    {
         WriteStrokeVertex(v, 0, x0, y0, x1, y1, -1f, 0f);
         WriteStrokeVertex(v, 6, x0, y0, x1, y1, +1f, 0f);
         WriteStrokeVertex(v, 12, x0, y0, x1, y1, +1f, 1f);
         WriteStrokeVertex(v, 18, x0, y0, x1, y1, -1f, 0f);
         WriteStrokeVertex(v, 24, x0, y0, x1, y1, +1f, 1f);
         WriteStrokeVertex(v, 30, x0, y0, x1, y1, -1f, 1f);
-        EmitDraw(v, 6);
     }
 
     private static void WriteStrokeVertex(Span<float> v, int at,

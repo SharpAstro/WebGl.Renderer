@@ -116,6 +116,50 @@ public sealed class CommandBufferEncodingTests
     }
 
     [Fact]
+    public void DrawPolyline_BatchesAllSegmentsIntoOneDraw()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        renderer.Clear(new RGBAColor32(0, 0, 0, 255));
+        // 5 points = 4 segments. The base-class fallback would emit 4 separate (SetExtra, Draw) pairs;
+        // the override collapses them to one SetExtra + one Draw over 4×6 = 24 vertices.
+        (float, float)[] pts = [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)];
+        renderer.DrawPolyline(pts, new RGBAColor32(255, 255, 255, 255), thickness: 2);
+
+        var cmds = PresentAndDecode(renderer, bridge);
+        cmds.Select(c => c.Op).ShouldBe(
+            [Opcode.Clear, Opcode.UseProgram, Opcode.SetColor, Opcode.SetExtra, Opcode.Draw]);
+        cmds.Count(c => c.Op == Opcode.Draw).ShouldBe(1);
+        cmds[^1].Slots[0].ShouldBe(0);   // firstFloat
+        cmds[^1].Slots[1].ShouldBe(24);  // 4 segments × 6 verts
+        bridge.Flushes[^1].Vertices.Length.ShouldBe(24 * 6); // 6 floats per stroke vertex
+    }
+
+    [Fact]
+    public void DrawPolyline_TooFewPoints_EmitsNoDraw()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        renderer.Clear(new RGBAColor32(0, 0, 0, 255));
+        renderer.DrawPolyline([(5f, 5f)], new RGBAColor32(255, 255, 255, 255));
+
+        var cmds = PresentAndDecode(renderer, bridge);
+        cmds.ShouldNotContain(c => c.Op == Opcode.Draw);
+    }
+
+    [Fact]
+    public void DrawPolylineDashed_BatchesEveryDashIntoOneDraw()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        renderer.Clear(new RGBAColor32(0, 0, 0, 255));
+        // One 100px segment, dash 10 / gap 10 (period 20): dashes start at t = 0,20,40,60,80 → 5 dashes.
+        renderer.DrawPolylineDashed([(0f, 0f), (100f, 0f)], new RGBAColor32(255, 255, 255, 255),
+            dashLength: 10f, gapLength: 10f, thickness: 1);
+
+        var cmds = PresentAndDecode(renderer, bridge);
+        cmds.Count(c => c.Op == Opcode.Draw).ShouldBe(1);
+        cmds[^1].Slots[1].ShouldBe(30); // 5 dashes × 6 verts
+    }
+
+    [Fact]
     public void Ellipses_EncodeInnerRadius()
     {
         var (renderer, bridge) = CreateRenderer();
