@@ -123,9 +123,16 @@ public sealed partial class CanvasTextOverlay : ComponentBase, IAsyncDisposable
     /// <summary>Hides + blurs the input. Does not raise <see cref="OnBlurred"/>.</summary>
     public async ValueTask HideAsync()
     {
-        if (_module is null || !IsVisible)
+        // Do NOT early-return on !IsVisible. A native blur (the user tapping a canvas control while the
+        // input is focused) fires OnOverlayBlur, which sets IsVisible = false, yet the <input> is still
+        // display:block -- only this JS hide() sets display:none. Because the blur is synchronous but the
+        // host's deactivate -> HideAsync runs later (async .NET interop after the pointer event), guarding
+        // on IsVisible would skip the hide and strand a visible, orphaned <input> over the canvas (it then
+        // swallows clicks/typing since the .NET side is deactivated). Hide must be unconditional +
+        // idempotent: "after HideAsync, the DOM is hidden", regardless of the IsVisible bookkeeping.
+        if (_module is null)
         {
-            return;
+            return; // pre-first-render: nothing attached to hide yet
         }
         IsVisible = false;
         await _module.InvokeVoidAsync("hide", _inputRef);

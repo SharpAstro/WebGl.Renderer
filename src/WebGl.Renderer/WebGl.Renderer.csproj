@@ -8,7 +8,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <VersionPrefix>1.8.0</VersionPrefix>
+    <VersionPrefix>1.9.0</VersionPrefix>
     <Description>WebGL2 rendering backend for DIR.Lib's Renderer&lt;TSurface&gt; — Blazor WebAssembly, command-buffer JS interop, MSDF text via the shared SdfFontAtlas core. AOT compatible.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/SharpAstro/WebGl.Renderer</RepositoryUrl>
