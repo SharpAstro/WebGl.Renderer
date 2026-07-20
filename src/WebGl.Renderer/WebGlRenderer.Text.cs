@@ -28,7 +28,7 @@ public sealed partial class WebGlRenderer
     {
         if (text.IsEmpty) return (0f, 0f);
 
-        var glyphScale = SdfFontAtlas.GetGlyphScale(fontSize);
+        var glyphScale = _atlas.GetGlyphScale(fontSize);
         // Same shaper as DrawText, so measured width matches drawn advance exactly. '\n' measures
         // as a whitespace rune (advance from the 'n' reference glyph) — matching the desktop
         // renderer, which never splits lines here either.
@@ -56,7 +56,7 @@ public sealed partial class WebGlRenderer
         if (text.IsEmpty) return;
 
         var lineCount = text.Count('\n') + 1;
-        var glyphScale = SdfFontAtlas.GetGlyphScale(fontSize);
+        var glyphScale = _atlas.GetGlyphScale(fontSize);
         var lineHeight = fontSize * 1.3f;
         var totalHeight = lineCount * lineHeight;
 
@@ -144,7 +144,7 @@ public sealed partial class WebGlRenderer
         // One pipeline/color/edge setup, then one BindTexture + Draw per non-empty page.
         EnsurePipeline(PipelineId.Sdf);
         EnsureColor(fontColor);
-        Surface.Emit(Opcode.SetExtra, [WebGlContext.F(SdfFontAtlas.ScreenPxHalfBand(fontSize))]);
+        Surface.Emit(Opcode.SetExtra, [WebGlContext.F(_atlas.ScreenPxHalfBand(fontSize))]);
         for (var page = 0; page < _sdfPageVertices.Count; page++)
         {
             var bucket = _sdfPageVertices[page];

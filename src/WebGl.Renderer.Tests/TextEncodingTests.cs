@@ -48,7 +48,7 @@ public sealed class TextEncodingTests : IDisposable
         draw.Slots[1].ShouldBe(12); // 2 glyphs × 6 verts
         // sdfEdge uniform carries the analytic AA half-band for this font size.
         var extra = cmds.Last(c => c.Op == Opcode.SetExtra);
-        extra.SlotF(0).ShouldBe(SdfFontAtlas.ScreenPxHalfBand(32f), 1e-6);
+        extra.SlotF(0).ShouldBe(_renderer.Atlas.ScreenPxHalfBand(32f), 1e-6);
     }
 
     [Fact]
