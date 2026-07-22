@@ -12,7 +12,16 @@
     <div class="@Class" style="position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:5;">
         @foreach (var run in Runs)
         {
-            <div style="@RunStyle(run)">@run.Text</div>
+            @if (run.Href is { Length: > 0 } href)
+            {
+                @* A hyperlink run: a real <a> so the browser owns open/new-tab/copy-link. target=_blank
+                   opens a new tab; rel=noopener severs the opener reference (tabnabbing hardening). *@
+                <a href="@href" target="_blank" rel="noopener" style="@RunStyle(run)">@run.Text</a>
+            }
+            else
+            {
+                <div style="@RunStyle(run)">@run.Text</div>
+            }
         }
     </div>
 }

@@ -12,6 +12,11 @@ namespace WebGl.Renderer;
 /// <c>SelectableTextRegion</c>s (which are in backing-buffer pixels) by dividing by the
 /// device-pixel-ratio. A readonly record struct so hosts can cheaply <c>SequenceEqual</c> two frames'
 /// run lists to skip re-rendering when nothing changed.
+/// <para>
+/// <see cref="Href"/>, when non-null, renders the run as a real <c>&lt;a href&gt;</c> (new-tab,
+/// <c>rel="noopener"</c>) instead of a plain selectable span, so the browser handles open/copy-link
+/// natively. Mirrors <c>SelectableTextRegion.Href</c>.
+/// </para>
 /// </summary>
 public readonly record struct OverlayTextRun(
     float X, float Y, float Width, float Height,
@@ -19,7 +24,8 @@ public readonly record struct OverlayTextRun(
     float FontSizePx,
     RGBAColor32 Color,
     TextAlign HorizontalAlign = TextAlign.Near,
-    TextAlign VerticalAlign = TextAlign.Center);
+    TextAlign VerticalAlign = TextAlign.Center,
+    string? Href = null);
 
 /// <summary>
 /// A retained layer of read-only, natively-selectable text runs rendered as real DOM over a
@@ -53,7 +59,11 @@ public sealed partial class CanvasTextLayer : ComponentBase
     {
         var sb = new StringBuilder(256);
         sb.Append("position:absolute;overflow:hidden;white-space:pre;line-height:1.3;");
-        sb.Append("pointer-events:auto;user-select:text;-webkit-user-select:text;cursor:text;");
+        sb.Append("pointer-events:auto;user-select:text;-webkit-user-select:text;");
+        // A link run gets pointer affordance + an underline so it reads as clickable; a plain span keeps
+        // the text caret and no decoration (an <a> would otherwise inherit the browser default underline
+        // AND link colour -- we set colour explicitly below, so only the underline needs asserting here).
+        sb.Append(run.Href is { Length: > 0 } ? "cursor:pointer;text-decoration:underline;" : "cursor:text;");
         sb.Append(CultureInfo.InvariantCulture,
             $"left:{run.X:0.##}px;top:{run.Y:0.##}px;width:{run.Width:0.##}px;height:{run.Height:0.##}px;");
         sb.Append(CultureInfo.InvariantCulture, $"font-size:{run.FontSizePx:0.##}px;");
