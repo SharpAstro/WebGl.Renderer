@@ -1,4 +1,4 @@
-name: CI/CD
+﻿name: CI/CD
 
 on:
   push:
@@ -7,7 +7,15 @@ on:
     branches: [ "main" ]
 
 env:
-  VERSION_PREFIX: 1.11.${{ github.run_number }}
+  # 1.12 - WebGlRenderer.FillRoundedRectangle: a GPU override of DIR.Lib 6.20's scanline
+  #        fallback. One rounded-box SDF quad per rect instead of one FillRectangle per row -- which
+  #        matters more here than on Vulkan, since every span would be its own command-buffer record
+  #        crossing into JS. New PipelineId.RoundRect (id 4) + shader pair; the box parameters ride
+  #        on VERTEX ATTRIBUTES because uExtra is a single float and a rounded box needs three.
+  #        Custom pipeline ids now start at 5, automatically: the JS side allocates them as
+  #        pipelines.length, so there was no constant to update.
+  #        Re-pins DIR.Lib 6.14.* -> 6.21.* (FillRoundedRectangle 6.20, Layout.Node.Radius 6.21).
+  VERSION_PREFIX: 1.12.${{ github.run_number }}
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release

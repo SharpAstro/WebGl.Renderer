@@ -1,4 +1,4 @@
-<!-- Sdk.Razor (not plain Sdk) is load-bearing: it enables the static-web-assets pipeline that
+﻿<!-- Sdk.Razor (not plain Sdk) is load-bearing: it enables the static-web-assets pipeline that
      ships wwwroot/*.js inside the NuGet package and surfaces it to consuming Blazor apps at
      _content/WebGl.Renderer/*.js with zero consumer wiring, and it compiles the WebGlCanvas
      Razor component (the reusable hi-dpi canvas host). -->
@@ -8,7 +8,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <VersionPrefix>1.11.0</VersionPrefix>
+    <VersionPrefix>1.12.0</VersionPrefix>
     <Description>WebGL2 rendering backend for DIR.Lib's Renderer&lt;TSurface&gt; — Blazor WebAssembly, command-buffer JS interop, MSDF text via the shared SdfFontAtlas core. AOT compatible.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/SharpAstro/WebGl.Renderer</RepositoryUrl>

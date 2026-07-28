@@ -1,4 +1,4 @@
-using DIR.Lib;
+﻿using DIR.Lib;
 using Shouldly;
 using WebGl.Renderer.Tests.Fakes;
 using static WebGl.Renderer.Tests.Fakes.TestGeometry;
@@ -173,6 +173,73 @@ public sealed class CommandBufferEncodingTests
         extras.Count.ShouldBe(2);
         extras[0].SlotF(0).ShouldBe(0f);           // fill: solid disc
         extras[1].SlotF(0).ShouldBe(0.9f, 1e-4);   // ring: 1 - 5/50
+    }
+
+    [Fact]
+    public void FillRoundedRectangle_EncodesOneQuadOnTheRoundRectPipeline()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        renderer.Clear(new RGBAColor32(0, 0, 0, 255));
+        renderer.FillRoundedRectangle(Rect(0, 0, 40, 20), new RGBAColor32(255, 255, 255, 255), cornerRadius: 4f);
+
+        var cmds = PresentAndDecode(renderer, bridge);
+        var verts = bridge.Flushes[^1].Vertices;
+
+        cmds.Select(c => c.Op).ShouldBe([Opcode.Clear, Opcode.UseProgram, Opcode.SetColor, Opcode.Draw]);
+        cmds[1].Slots[0].ShouldBe((int)PipelineId.RoundRect);
+        cmds[3].Slots[1].ShouldBe(6); // ONE quad, not one span per row
+
+        // 6 verts x 7 floats: pos(2), localPx(2), halfPx(2), radiusPx(1).
+        verts.Length.ShouldBe(42);
+        for (var i = 0; i < 6; i++)
+        {
+            var at = i * 7;
+            verts[at + 4].ShouldBe(20f, $"vertex {i} half-width");
+            verts[at + 5].ShouldBe(10f, $"vertex {i} half-height");
+            verts[at + 6].ShouldBe(4f, $"vertex {i} radius");
+            // The local offset must be the vertex position measured from the rect centre, or the
+            // fragment shader evaluates the distance field about the wrong origin.
+            verts[at + 2].ShouldBe(verts[at] - 20f, $"vertex {i} local x");
+            verts[at + 3].ShouldBe(verts[at + 1] - 10f, $"vertex {i} local y");
+        }
+    }
+
+    /// <summary>
+    /// A zero radius must fall through to the flat path, so a caller can thread a radius through
+    /// unconditionally and pay nothing when it is off.
+    /// </summary>
+    [Fact]
+    public void FillRoundedRectangle_ZeroRadius_EncodesAPlainFlatQuad()
+    {
+        var (rounded, roundedBridge) = CreateRenderer();
+        rounded.Clear(new RGBAColor32(0, 0, 0, 255));
+        rounded.FillRoundedRectangle(Rect(10, 20, 30, 40), new RGBAColor32(0, 255, 0, 255), cornerRadius: 0f);
+
+        var (square, squareBridge) = CreateRenderer();
+        square.Clear(new RGBAColor32(0, 0, 0, 255));
+        square.FillRectangle(Rect(10, 20, 30, 40), new RGBAColor32(0, 255, 0, 255));
+
+        var roundedCmds = PresentAndDecode(rounded, roundedBridge);
+        var squareCmds = PresentAndDecode(square, squareBridge);
+
+        roundedCmds.Select(c => c.Op).ShouldBe(squareCmds.Select(c => c.Op));
+        roundedCmds[1].Slots[0].ShouldBe((int)PipelineId.Flat);
+        roundedBridge.Flushes[^1].Vertices.ShouldBe(squareBridge.Flushes[^1].Vertices);
+    }
+
+    /// <summary>An over-large radius clamps to half the shorter side, so it degrades to a stadium
+    /// rather than inverting the arc in the distance field.</summary>
+    [Fact]
+    public void FillRoundedRectangle_ClampsAnOverLargeRadius()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        renderer.Clear(new RGBAColor32(0, 0, 0, 255));
+        renderer.FillRoundedRectangle(Rect(0, 0, 40, 20), new RGBAColor32(255, 255, 255, 255), cornerRadius: 500f);
+
+        PresentAndDecode(renderer, bridge);
+        var verts = bridge.Flushes[^1].Vertices;
+
+        verts[6].ShouldBe(10f, "radius clamps to half the shorter side (20 / 2)");
     }
 
     [Fact]

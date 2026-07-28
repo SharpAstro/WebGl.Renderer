@@ -1,4 +1,4 @@
-namespace WebGl.Renderer;
+﻿namespace WebGl.Renderer;
 
 /// <summary>
 /// GLSL ES 3.00 shader sources — transcribed 1:1 from SdlVulkan.Renderer's VkPipelineSet.cs
@@ -63,6 +63,51 @@ public static class WebGlPipelines
             // statement avoids the llvmpipe double-discard-with-MSAA bug class.
             if (dist > 1.0 || dist < innerSq) discard;
             FragColor = uColor;
+        }
+        """;
+
+    // --- RoundRect: rounded-box distance field, ONE quad per rect -------------------------------
+    // The box parameters (half extents, corner radius) ride on VERTEX ATTRIBUTES rather than uExtra,
+    // because uExtra is a single float and a rounded box needs three. They are constant across the
+    // quad, so interpolating them reproduces the same value at every fragment.
+
+    public const string RoundRectVertexSource = """
+        #version 300 es
+        layout(location = 0) in vec2 aPos;
+        layout(location = 1) in vec2 aLocal;   // offset from the rect centre, in pixels
+        layout(location = 2) in vec2 aHalf;    // half extents, in pixels
+        layout(location = 3) in float aRadius; // corner radius, in pixels
+        uniform mat4 uProj;
+        out vec2 vLocal;
+        out vec2 vHalf;
+        out float vRadius;
+        void main() {
+            gl_Position = uProj * vec4(aPos, 0.0, 1.0);
+            vLocal = aLocal;
+            vHalf = aHalf;
+            vRadius = aRadius;
+        }
+        """;
+
+    public const string RoundRectFragmentSource = """
+        #version 300 es
+        precision highp float;
+        uniform vec4 uColor;
+        in vec2 vLocal;
+        in vec2 vHalf;
+        in float vRadius;
+        out vec4 FragColor;
+        void main() {
+            // Standard rounded-box SDF, evaluated in PIXELS -- so the one-pixel coverage feather
+            // below needs no fwidth. The min(max(q.x, q.y), 0.0) term carries the correct NEGATIVE
+            // distance for interior fragments; without it the interior reads 0 and the feather
+            // would halve the alpha of the whole fill rather than just its edge.
+            vec2 q = abs(vLocal) - (vHalf - vec2(vRadius));
+            float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - vRadius;
+            // Single discard, matching the ellipse shader's llvmpipe-safe shape.
+            if (d > 0.5) discard;
+            float coverage = clamp(0.5 - d, 0.0, 1.0);
+            FragColor = vec4(uColor.rgb, uColor.a * coverage);
         }
         """;
 
@@ -137,13 +182,13 @@ public static class WebGlPipelines
     /// <summary>Vertex-shader source per pipeline, ordered by <see cref="PipelineId"/> —
     /// the wire order CompilePipelines hands to the JS shim.</summary>
     public static readonly string[] VertexSources =
-        [FlatVertexSource, EllipseVertexSource, StrokeVertexSource, SdfVertexSource];
+        [FlatVertexSource, EllipseVertexSource, StrokeVertexSource, SdfVertexSource, RoundRectVertexSource];
 
     /// <summary>Fragment-shader source per pipeline, ordered by <see cref="PipelineId"/>.</summary>
     public static readonly string[] FragmentSources =
-        [FlatFragmentSource, EllipseFragmentSource, StrokeFragmentSource, SdfFragmentSource];
+        [FlatFragmentSource, EllipseFragmentSource, StrokeFragmentSource, SdfFragmentSource, RoundRectFragmentSource];
 
     /// <summary>Floats per vertex, per pipeline, ordered by <see cref="PipelineId"/> —
     /// mirrored by the JS pipeline table's attribute layouts.</summary>
-    public static readonly int[] FloatsPerVertex = [2, 4, 6, 4];
+    public static readonly int[] FloatsPerVertex = [2, 4, 6, 4, 7];
 }

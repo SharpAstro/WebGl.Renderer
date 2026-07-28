@@ -1,4 +1,4 @@
-namespace WebGl.Renderer;
+﻿namespace WebGl.Renderer;
 
 /// <summary>Primitive topology for a custom pipeline's draws. Values are wire protocol
 /// (webgl-renderer.js maps them to GL modes) — keep stable.</summary>
@@ -30,7 +30,9 @@ public enum PipelineBlend
 public readonly record struct VertexAttrib(int Location, int Floats, bool PerInstance = false);
 
 /// <summary>Handle to a pipeline registered via <see cref="WebGlRenderer.RegisterPipeline"/>.
-/// Ids continue past the fixed <see cref="PipelineId"/> table (first custom id is 4).</summary>
+/// Ids continue past the fixed <see cref="PipelineId"/> table (first custom id is 5). The id comes
+/// from the JS side (pipelines.length after the built-ins compile), so adding a built-in shifts this
+/// automatically -- there is no constant to keep in step, only this sentence.</summary>
 public readonly record struct PipelineHandle(int Id);
 
 /// <summary>Handle to a persistent GPU buffer created via

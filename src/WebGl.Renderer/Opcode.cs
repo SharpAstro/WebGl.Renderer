@@ -1,4 +1,4 @@
-namespace WebGl.Renderer;
+﻿namespace WebGl.Renderer;
 
 /// <summary>
 /// Command-stream opcodes. Every record is a fixed <see cref="CommandBuffer.SlotsPerRecord"/>
@@ -83,4 +83,7 @@ public enum PipelineId
     Stroke = 2,
     /// <summary>MTSDF text, pos+uv(4f); uExtra = sdfEdge (analytic AA half-band).</summary>
     Sdf = 3,
+    /// <summary>Rounded-box fill, pos+localPx+halfPx+radiusPx(7f); no uExtra -- a rounded box needs
+    /// three parameters, so they ride on the vertex attributes instead.</summary>
+    RoundRect = 4,
 }

@@ -38,10 +38,17 @@ public sealed class ShaderSourceSanityTests
     [Fact]
     public void PipelineTables_AreIndexAligned()
     {
-        WebGlPipelines.VertexSources.Length.ShouldBe(4);
-        WebGlPipelines.FragmentSources.Length.ShouldBe(4);
-        // Wire protocol with the JS ATTRIBS table — PipelineId order: Flat, Ellipse, Stroke, Sdf.
-        WebGlPipelines.FloatsPerVertex.ShouldBe([2, 4, 6, 4]);
+        // Derived from the enum, not a literal: the three tables are index-matched to PipelineId, so
+        // adding a pipeline should fail this test only if a table was missed -- not merely because a
+        // hardcoded count went stale.
+        var pipelineCount = Enum.GetValues<PipelineId>().Length;
+        WebGlPipelines.VertexSources.Length.ShouldBe(pipelineCount);
+        WebGlPipelines.FragmentSources.Length.ShouldBe(pipelineCount);
+        WebGlPipelines.FloatsPerVertex.Length.ShouldBe(pipelineCount);
+
+        // Wire protocol with the JS ATTRIBS table — PipelineId order: Flat, Ellipse, Stroke, Sdf,
+        // RoundRect. These stay literal because they ARE the contract, mirrored by hand in JS.
+        WebGlPipelines.FloatsPerVertex.ShouldBe([2, 4, 6, 4, 7]);
     }
 
     [Fact]

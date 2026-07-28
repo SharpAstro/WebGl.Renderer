@@ -342,6 +342,61 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
     public override void FillEllipse(in RectInt rect, RGBAColor32 fillColor)
         => EmitEllipseQuad(in rect, fillColor, innerRadius: 0f);
 
+    /// <summary>
+    /// Rounded-rect fill as a SINGLE distance-field quad, replacing the base class's
+    /// one-span-per-row scanline fallback. That fallback is especially costly here: every span
+    /// would be its own command-buffer draw crossing into JS, so a 200px panel would cost 200
+    /// records instead of one.
+    /// <para>
+    /// One quad also means every pixel is covered exactly once, so a translucent fill blends the
+    /// same amount in the corners as in the middle -- the property the CPU fallback emits
+    /// non-overlapping spans to preserve.
+    /// </para>
+    /// A zero (or negative) radius delegates to <see cref="FillRectangle"/>, so the square path
+    /// is untouched. The radius clamps to half the shorter side, matching the base class.
+    /// </summary>
+    public override void FillRoundedRectangle(in RectInt rect, RGBAColor32 fillColor, float cornerRadius)
+    {
+        float x0 = Math.Min(rect.UpperLeft.X, rect.LowerRight.X);
+        float x1 = Math.Max(rect.UpperLeft.X, rect.LowerRight.X);
+        float y0 = Math.Min(rect.UpperLeft.Y, rect.LowerRight.Y);
+        float y1 = Math.Max(rect.UpperLeft.Y, rect.LowerRight.Y);
+        var halfW = (x1 - x0) * 0.5f;
+        var halfH = (y1 - y0) * 0.5f;
+        if (halfW <= 0f || halfH <= 0f) return;
+
+        var radius = MathF.Min(cornerRadius, MathF.Min(halfW, halfH));
+        if (radius <= 0f)
+        {
+            FillRectangle(in rect, fillColor);
+            return;
+        }
+
+        EnsurePipeline(PipelineId.RoundRect);
+        EnsureColor(fillColor);
+
+        // 6 verts x (pos, localPx, halfPx, radiusPx). The last three are identical at every vertex --
+        // constant across the quad, so interpolation reproduces them per fragment and no uniform is
+        // needed (uExtra is a single float; a rounded box needs three parameters).
+        Span<float> v = stackalloc float[42];
+        WriteRoundRectVertex(v, 0, x0, y0, -halfW, -halfH, halfW, halfH, radius);
+        WriteRoundRectVertex(v, 7, x1, y0, +halfW, -halfH, halfW, halfH, radius);
+        WriteRoundRectVertex(v, 14, x1, y1, +halfW, +halfH, halfW, halfH, radius);
+        WriteRoundRectVertex(v, 21, x0, y0, -halfW, -halfH, halfW, halfH, radius);
+        WriteRoundRectVertex(v, 28, x1, y1, +halfW, +halfH, halfW, halfH, radius);
+        WriteRoundRectVertex(v, 35, x0, y1, -halfW, +halfH, halfW, halfH, radius);
+        EmitDraw(v, 7);
+    }
+
+    private static void WriteRoundRectVertex(Span<float> v, int at,
+        float x, float y, float localX, float localY, float halfW, float halfH, float radius)
+    {
+        v[at] = x; v[at + 1] = y;
+        v[at + 2] = localX; v[at + 3] = localY;
+        v[at + 4] = halfW; v[at + 5] = halfH;
+        v[at + 6] = radius;
+    }
+
     public override void DrawEllipse(in RectInt rect, RGBAColor32 strokeColor, float strokeWidth = 1f)
     {
         // Ring via normalized inner radius: outer radius (local units) is 1; the stroke eats
