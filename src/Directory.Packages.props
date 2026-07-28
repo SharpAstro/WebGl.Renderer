@@ -1,11 +1,11 @@
-<Project>
+﻿<Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Floating X.Y.* pins so DIR.Lib build-counter republishes flow in on restore. -->
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="DIR.Lib" Version="6.14.*" />
+    <PackageVersion Include="DIR.Lib" Version="6.21.*" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
   </ItemGroup>

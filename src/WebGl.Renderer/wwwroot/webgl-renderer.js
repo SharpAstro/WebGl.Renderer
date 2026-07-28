@@ -1,4 +1,4 @@
-// @ts-check
+﻿// @ts-check
 // WebGl.Renderer — the JS half of the command-buffer interop.
 //
 // .NET (WebGlRenderer) accumulates a per-frame command stream (fixed 8-int32 records; float
@@ -43,6 +43,7 @@ const ATTRIBS = [
   [[0, 2], [1, 2]],          // Ellipse: aPos, aLocalPos
   [[0, 2], [1, 2], [2, 2]],  // Stroke:  aP0, aP1, aParams
   [[0, 2], [1, 2]],          // Sdf:     aPos, aTexCoord
+  [[0, 2], [1, 2], [2, 2], [3, 1]],  // RoundRect: aPos, aLocal, aHalf, aRadius
 ];
 
 /**
