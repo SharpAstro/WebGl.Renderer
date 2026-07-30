@@ -24,7 +24,15 @@ env:
   #        Custom pipeline ids now start at 5, automatically: the JS side allocates them as
   #        pipelines.length, so there was no constant to update.
   #        Re-pins DIR.Lib 6.14.* -> 6.21.* (FillRoundedRectangle 6.20, Layout.Node.Radius 6.21).
-  VERSION_PREFIX: 1.13.${{ github.run_number }}
+  # 1.14 - lockstep rebuild against DIR.Lib 7.4, no code change. This was the last sibling left on an
+  #        older DIR.Lib: 1.13 rebuilt against 7.0 while Console.Lib and SdlVulkan.Renderer have since
+  #        moved to 7.4, so a consumer holding both a desktop and a web renderer restored two DIR.Lib
+  #        versions and unified on the higher one by luck rather than by intent. 7.4 itself adds
+  #        PixelMeasureContext per-axis scales plus a CellAuthored factory, and PixelWidgetBase
+  #        Arrange/Paint/RenderLayout overloads taking the measure CONTEXT instead of a bare dpiScale;
+  #        both additive, with the scalar overloads delegating through an isotropic context, so this
+  #        renderer paints byte-identically.
+  VERSION_PREFIX: 1.14.${{ github.run_number }}
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
