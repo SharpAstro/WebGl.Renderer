@@ -80,8 +80,16 @@ jobs:
 
       # Headless test surface: command-buffer encoding, shader-source sanity, real-font text
       # encode over a fake JS bridge. Real-browser (Playwright) coverage is a future lane.
+      #
+      # GeneratePackageOnBuild=false is load-bearing, not tidiness. The test project references
+      # WebGl.Renderer, so this rebuilds it — and the renderer sets GeneratePackageOnBuild, so without
+      # this it PACKS AGAIN. That second pack gets no -p:Version (the step above passes it, this one
+      # cannot without restating it), so it lands at the csproj default X.Y.0 in the same bin/Release
+      # the publish job globs with **/*.nupkg. Both then go to nuget.org: that is where the 1.14.0
+      # sitting beside 1.14.181 came from — CI published it every run, and --skip-duplicate hid it by
+      # making the re-push of an existing version a no-op rather than an error.
       - name: Test
-        run: dotnet test src/WebGl.Renderer.Tests/WebGl.Renderer.Tests.csproj -c $BUILD_CONF
+        run: dotnet test src/WebGl.Renderer.Tests/WebGl.Renderer.Tests.csproj -c $BUILD_CONF -p:GeneratePackageOnBuild=false
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
