@@ -32,10 +32,18 @@ env:
   #        Arrange/Paint/RenderLayout overloads taking the measure CONTEXT instead of a bare dpiScale;
   #        both additive, with the scalar overloads delegating through an isotropic context, so this
   #        renderer paints byte-identically.
-  VERSION_PREFIX: 1.14.${{ github.run_number }}
+  # 1.15 - lockstep rebuild against DIR.Lib 7.5, and the version is no longer written here. 7.5 resolves
+  #        a font by its DECLARED family rather than by file identity, so every face in a family is
+  #        reachable and a run a face cannot cover falls back per run instead of per request; additive,
+  #        so this renderer paints byte-identically. Rebuilt because 1.14 left this the last sibling on
+  #        7.4 once DIR.Lib, Console.Lib and SdlVulkan.Renderer moved, which is the same split-DIR.Lib
+  #        hazard 1.14 itself set out to close.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
+  # The build job CAPTURES a dotnet invocation's stdout to resolve the version, so the SDK's first-run
+  # banner must not be able to land in it.
+  DOTNET_NOLOGO: 1
 
 jobs:
   build-test:
@@ -45,6 +53,23 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+
+      - name: Resolve version prefix
+        # Read the version back from the one place it is written (src/Directory.Build.props) instead of
+        # restating it here. This is not hypothetical drift: the csproj used to carry its own
+        # VersionPrefix 1.14.0, and a local `dotnet pack` published that to nuget.org beside CI's
+        # 1.14.181. -getProperty only EVALUATES the file, so it needs no restore and can run first. The
+        # value is CAPTURED, so nothing else may print to stdout: DOTNET_NOLOGO (workflow env) keeps the
+        # SDK first-run banner out — this is the job's first dotnet call — and the shape check makes
+        # anything else unexpected, or a renamed property, fail the run rather than quietly stamping the
+        # package ".<run>".
+        run: |
+          MM="$(dotnet msbuild src/Directory.Build.props -getProperty:VersionMajorMinor -nologo)"
+          case "$MM" in
+            [0-9]*.[0-9]*) ;;
+            *) echo "::error::VersionMajorMinor did not resolve from src/Directory.Build.props (got '$MM')"; exit 1 ;;
+          esac
+          echo "VERSION_PREFIX=${MM}.${{ github.run_number }}" >> "$GITHUB_ENV"
 
       # No sibling checkout in CI: DIR.Lib resolves from NuGet (UseLocalDirLib=false via Exists()).
       - name: Restore
