@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- THE version for this repo's package, and the only place it is written. CI stamps -p:Version
+         when it builds, so a per-csproj prefix only ever served LOCAL builds — and it drifted into a
+         real publish: a local `dotnet pack` shipped 1.14.0 to nuget.org alongside CI's 1.14.181,
+         because the csproj's own prefix is what pack uses when no -p:Version is passed. One property,
+         read by both, is what stops that.
+         The workflow READS this back (dotnet msbuild -getProperty:VersionMajorMinor) rather than
+         restating it, so a release bump is this one line and CI cannot disagree with the package it
+         builds. Add the matching changelog entry above the version's resolve step in
+         .github/workflows/dotnet.yml — that comment block is the de-facto release notes, and it stays
+         in the yml because several entries contain a double hyphen, which XML forbids inside a
+         comment. -->
+    <VersionMajorMinor>1.15</VersionMajorMinor>
+    <!-- Local builds get Major.Minor.0; CI passes -p:Version=Major.Minor.<run><attempt>+<sha>, and the
+         condition lets it win. -->
+    <VersionPrefix Condition="'$(VersionPrefix)' == ''">$(VersionMajorMinor).0</VersionPrefix>
+  </PropertyGroup>
+
+</Project>
