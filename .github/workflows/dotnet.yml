@@ -38,6 +38,14 @@ env:
   #        so this renderer paints byte-identically. Rebuilt because 1.14 left this the last sibling on
   #        7.4 once DIR.Lib, Console.Lib and SdlVulkan.Renderer moved, which is the same split-DIR.Lib
   #        hazard 1.14 itself set out to close.
+  # 1.16 - lockstep rebuild against DIR.Lib 7.8 (7.5 -> 7.8; nothing in 7.6 or 7.7 touched this backend).
+  #        No renderer code change. 7.8 makes the PIXEL painter fit every text run to the rect the layout
+  #        engine arranged for it -- 7.7 had shipped Layout.Content.Text.Trim as a declaration only the
+  #        cell painter acted on, so on a GPU surface an over-wide run still drew over its neighbour.
+  #        TextTrim gains Shrink (scale down, keep every character) and None (draw whole and overhang, the
+  #        previous behaviour). BEHAVIOUR CHANGE upstream, not additive: a run left on the default
+  #        TextTrim.End now ellipsizes here where it used to overhang. Moved with the family this time
+  #        rather than being found two minors behind, which is the hazard 1.14 and 1.15 both closed.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
