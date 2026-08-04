@@ -46,6 +46,13 @@ env:
   #        previous behaviour). BEHAVIOUR CHANGE upstream, not additive: a run left on the default
   #        TextTrim.End now ellipsizes here where it used to overhang. Moved with the family this time
   #        rather than being found two minors behind, which is the hazard 1.14 and 1.15 both closed.
+  #        Later in 1.16, no X.Y bump and NO value change: src/Directory.Build.props now STATES
+  #        AssemblyVersion = $(VersionMajorMinor).0.0 instead of leaving it to the SDK default. The default
+  #        resolved to the same 1.16.0.0, so nothing shipped differently -- the point is that a default is
+  #        fragile. The moment any csproj here sets its own AssemblyVersion it wins silently, and CI stamps
+  #        -p:Version and -p:FileVersion but never -p:AssemblyVersion, so nothing would correct it. That is
+  #        exactly how DIR.Lib shipped 6.4.0.0 for two majors and SdlVulkan.Renderer shipped 6.11.0.0. All
+  #        seven sibling repos now state the rule once, in the props file, with none left in any csproj.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
