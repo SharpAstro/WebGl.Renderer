@@ -53,6 +53,21 @@ env:
   #        -p:Version and -p:FileVersion but never -p:AssemblyVersion, so nothing would correct it. That is
   #        exactly how DIR.Lib shipped 6.4.0.0 for two majors and SdlVulkan.Renderer shipped 6.11.0.0. All
   #        seven sibling repos now state the rule once, in the props file, with none left in any csproj.
+  # 1.17 - the canvas listens on POINTER events (@onpointerdown/move/up) instead of the mouse
+  #        compatibility ones. webgl-canvas.js has always called setPointerCapture on pointerdown, and
+  #        capture is defined over the pointer family, so the capture governed one event stream while
+  #        the app listened to another -- whether a drag that left the canvas kept being delivered was
+  #        left to per-browser compatibility-event behaviour. Now they are the same family.
+  #        TOUCH IS FILTERED OUT of the new handlers (PointerType == "touch"), which is load-bearing
+  #        rather than tidiness: pointer events fire for fingers too, and the JS touch bridge already
+  #        synthesises one-finger pan and two-finger pinch, so forwarding both would deliver every
+  #        touch drag twice and hand the pinch's first finger to the pan path as well.
+  #        Also NEW: @onpointercancel, reported as an up at the last position. There was no cancel path
+  #        at all, so a gesture the browser or the device took over (pen out of range, tab losing the
+  #        pointer) never sent an up and left the consumer's drag latched down indefinitely.
+  #        Consumer-visible: the three handlers now receive PointerEventArgs. It derives from
+  #        MouseEventArgs and CanvasPointerEventArgs still carries the base type, so consumer code
+  #        compiles unchanged; a consumer that wants the pointer type can now cast for it.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release

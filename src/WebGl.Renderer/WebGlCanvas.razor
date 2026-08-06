@@ -1,16 +1,24 @@
-@* Markup only — all logic lives in WebGlCanvas.razor.cs. No width/height attributes on purpose:
+﻿@* Markup only — all logic lives in WebGlCanvas.razor.cs. No width/height attributes on purpose:
    webgl-canvas.js owns the backing buffer from the first measurement (see the ownership contract
    in the code-behind's class doc), and nothing draws before OnReady fires, so there is no
    flash-of-wrong-size content. touch-action/user-select are inline so consumers don't need a
-   scoped-CSS bundle; display sizing is the consumer's job (via Class / an id-based CSS rule). *@
+   scoped-CSS bundle; display sizing is the consumer's job (via Class / an id-based CSS rule).
+
+   POINTER events, not the mouse compatibility ones: webgl-canvas.js calls setPointerCapture on
+   pointerdown, and capture is defined over the pointer family -- pairing it with @onmouse* left the
+   capture governing one stream while the app listened to another, so a drag that left the canvas
+   was delivered inconsistently across browsers. Touch is FILTERED OUT here (see the code-behind):
+   the JS touch bridge already synthesises one-finger pan and two-finger pinch, and pointer events
+   fire for fingers as well, so forwarding both would deliver every touch drag twice. *@
 <canvas @ref="_canvasRef"
         id="@Id"
         tabindex="@TabIndex"
         class="@Class"
         style="touch-action:none;user-select:none;-webkit-user-select:none;"
-        @onmousedown="HandlePointerDownAsync"
-        @onmousemove="HandlePointerMoveAsync"
-        @onmouseup="HandlePointerUpAsync"
+        @onpointerdown="HandlePointerDownAsync"
+        @onpointermove="HandlePointerMoveAsync"
+        @onpointerup="HandlePointerUpAsync"
+        @onpointercancel="HandlePointerCancelAsync"
         @onwheel="HandleWheelAsync"
         @onkeydown="HandleKeyDownAsync">
 </canvas>

@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -203,13 +203,32 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
         return new CanvasPointerEventArgs((int)Math.Round(e.OffsetX * dpr), (int)Math.Round(e.OffsetY * dpr), e);
     }
 
-    private Task HandlePointerDownAsync(MouseEventArgs e) => OnPointerDown.InvokeAsync(MapToBacking(e));
+    /// <summary>
+    /// A finger is handled by the JS touch bridge below, which also owns the two-finger pinch, so the
+    /// native pointer stream must ignore it -- pointer events fire for touch as well, and forwarding
+    /// both would deliver every touch drag twice (and fight the pinch, whose first finger would also
+    /// arrive as a pan). Mouse and pen come straight through.
+    /// </summary>
+    private static bool IsBridgedTouch(PointerEventArgs e)
+        => string.Equals(e.PointerType, "touch", StringComparison.Ordinal);
 
-    private Task HandlePointerMoveAsync(MouseEventArgs e)
-        => OnPointerMove.HasDelegate ? OnPointerMove.InvokeAsync(MapToBacking(e)) : Task.CompletedTask;
+    private Task HandlePointerDownAsync(PointerEventArgs e)
+        => IsBridgedTouch(e) ? Task.CompletedTask : OnPointerDown.InvokeAsync(MapToBacking(e));
 
-    private Task HandlePointerUpAsync(MouseEventArgs e)
-        => OnPointerUp.HasDelegate ? OnPointerUp.InvokeAsync(MapToBacking(e)) : Task.CompletedTask;
+    private Task HandlePointerMoveAsync(PointerEventArgs e)
+        => !IsBridgedTouch(e) && OnPointerMove.HasDelegate ? OnPointerMove.InvokeAsync(MapToBacking(e)) : Task.CompletedTask;
+
+    private Task HandlePointerUpAsync(PointerEventArgs e)
+        => !IsBridgedTouch(e) && OnPointerUp.HasDelegate ? OnPointerUp.InvokeAsync(MapToBacking(e)) : Task.CompletedTask;
+
+    /// <summary>
+    /// A cancelled pointer (the browser taking the gesture over, a pen leaving range, the tab losing
+    /// the device) never sends pointerup, so without this a drag would stay latched down forever. It
+    /// reports as an UP at the last position, which is the state every consumer already knows how to
+    /// end a gesture from.
+    /// </summary>
+    private Task HandlePointerCancelAsync(PointerEventArgs e)
+        => !IsBridgedTouch(e) && OnPointerUp.HasDelegate ? OnPointerUp.InvokeAsync(MapToBacking(e)) : Task.CompletedTask;
 
     private Task HandleWheelAsync(WheelEventArgs e)
     {

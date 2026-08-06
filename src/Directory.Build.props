@@ -1,4 +1,4 @@
-<Project>
+﻿<Project>
 
   <PropertyGroup>
     <!-- THE version for this repo's package, and the only place it is written. CI stamps -p:Version
@@ -12,7 +12,7 @@
          .github/workflows/dotnet.yml — that comment block is the de-facto release notes, and it stays
          in the yml because several entries contain a double hyphen, which XML forbids inside a
          comment. -->
-    <VersionMajorMinor>1.16</VersionMajorMinor>
+    <VersionMajorMinor>1.17</VersionMajorMinor>
     <!-- Local builds get Major.Minor.0; CI passes -p:Version=Major.Minor.<run><attempt>+<sha>, and the
          condition lets it win. -->
     <VersionPrefix Condition="'$(VersionPrefix)' == ''">$(VersionMajorMinor).0</VersionPrefix>
