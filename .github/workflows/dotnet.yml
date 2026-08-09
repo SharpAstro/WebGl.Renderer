@@ -68,6 +68,22 @@ env:
   #        Consumer-visible: the three handlers now receive PointerEventArgs. It derives from
   #        MouseEventArgs and CanvasPointerEventArgs still carries the base type, so consumer code
   #        compiles unchanged; a consumer that wants the pointer type can now cast for it.
+  # 1.18 - lockstep rebuild against DIR.Lib 7.14 (7.11 -> 7.14). No renderer code change. The whole range
+  #        is upstream text metrics, which this backend feels in full: a canvas is a pixel surface, and
+  #        MSDF text here comes off the shared SdfFontAtlas core.
+  #        DIR.Lib 7.12 is additive: TextInputRenderer takes a palette, the shape TabBar got in 7.10.
+  #        DIR.Lib 7.13 bounds the SDF atlas's rasterize retry, so a glyph that can never rasterize is
+  #        given up on instead of being re-claimed every frame and pinning IsDirty true -- worth more here
+  #        than anywhere, because a single-threaded WASM runtime has no second thread to hide a render that
+  #        never settles. It ALSO carried an unannounced measurement fix, only written up in 7.14's notes:
+  #        a whitespace advance now comes from the font rather than the 'n' glyph, and in DejaVu every
+  #        measured space had been 1.99x too wide, so space-padded text measures narrower from 7.13 on.
+  #        U+2007 FIGURE SPACE is the pad that keeps a column aligned, digit-width by definition.
+  #        DIR.Lib 7.14 makes TextFit.ShrinkToWidth return a size it actually measured, so a run fitted
+  #        with TextTrim.Shrink stops drawing a fraction of a pixel past its rect. Shrink is opt-in and
+  #        the default is End, so a consumer that never asks for it renders byte-identically.
+  #        Released alongside Console.Lib 4.20 and SdlVulkan.Renderer 7.11, moving with the family rather
+  #        than being found behind it -- the hazard 1.14 and 1.15 both closed, and 1.16 restated.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
