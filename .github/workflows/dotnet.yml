@@ -84,6 +84,10 @@ env:
   #        the default is End, so a consumer that never asks for it renders byte-identically.
   #        Released alongside Console.Lib 4.20 and SdlVulkan.Renderer 7.11, moving with the family rather
   #        than being found behind it -- the hazard 1.14 and 1.15 both closed, and 1.16 restated.
+  # 1.19 - No backend code change: the lockstep rebuild that re-pins DIR.Lib 7.14 -> 7.18, keeping
+  #        this the member that moves WITH the family rather than the one found two minors behind.
+  #        7.18's Layout.Content.Icon is painted by DIR.Lib's PixelWidgetBase, which this backend
+  #        inherits, so the icons arrive here for free.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
