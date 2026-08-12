@@ -91,6 +91,7 @@ env:
   # 1.20 - Follows DIR.Lib to 7.19 with the rest of the family, inheriting the three theme marks
   #        from the shared painter with no code of its own. Taken in the same cut as
   #        SdlVulkan.Renderer 7.14: the family lands together or it does not land.
+  # 1.21 - Follows DIR.Lib to 7.21 with the rest of the family. Nothing backend-specific.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
