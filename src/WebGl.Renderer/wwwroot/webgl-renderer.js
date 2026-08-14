@@ -485,12 +485,15 @@ export function flush(surfaceId, commands, vertexBytes) {
         const vBuf = s.buffers[cmds[b + 1]];
         const iBuf = s.buffers[cmds[b + 3]];
         if (!vBuf || !iBuf) throw new Error("webgl-renderer: unknown buffer in DrawInstanced");
-        const vCount = cmds[b + 2], iCount = cmds[b + 4];
+        const vCount = cmds[b + 2], iCount = cmds[b + 4], firstInstance = cmds[b + 5];
         const used = new Set();
         gl.bindBuffer(gl.ARRAY_BUFFER, vBuf);
         pointAttribs(s, pipeline.attribs, pipeline.floatsPerVertex * 4, 0, 0, used);
         gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
-        pointAttribs(s, pipeline.iAttribs, pipeline.iStride, 0, 1, used);
+        // firstInstance rides the ATTRIBUTE OFFSET, because WebGL2's drawArraysInstanced has no
+        // baseInstance argument (desktop GL 4.2 does; WebGL2 never picked it up). Skipping
+        // firstInstance instances of stride bytes is exactly equivalent for a divisor-1 attribute.
+        pointAttribs(s, pipeline.iAttribs, pipeline.iStride, firstInstance * pipeline.iStride, 1, used);
         disableStaleAttribs(s, used);
         gl.drawArraysInstanced(pipeline.mode, 0, vCount, iCount);
         break;

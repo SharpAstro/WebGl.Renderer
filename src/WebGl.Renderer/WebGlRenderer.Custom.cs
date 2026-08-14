@@ -68,7 +68,18 @@ public sealed partial class WebGlRenderer
         => Surface.Emit(Opcode.DrawBuffer, [buffer.Id, first, count]);
 
     /// <summary>Instanced draw: per-vertex attributes from <paramref name="vertices"/> (divisor 0),
-    /// per-instance attributes from <paramref name="instances"/> (divisor 1), both persistent.</summary>
-    public void DrawInstanced(GpuBufferHandle vertices, int vertexCount, GpuBufferHandle instances, int instanceCount)
-        => Surface.Emit(Opcode.DrawInstanced, [vertices.Id, vertexCount, instances.Id, instanceCount]);
+    /// per-instance attributes from <paramref name="instances"/> (divisor 1), both persistent.
+    ///
+    /// <para><paramref name="firstInstance"/> draws the instance range
+    /// <c>[firstInstance, firstInstance + instanceCount)</c>, so ONE persistent buffer can hold
+    /// several independently-drawn groups. WebGL2 has no <c>baseInstance</c> parameter (that is a
+    /// desktop-GL 4.2 feature), so this is expressed the only way the API allows: by pointing the
+    /// per-instance attributes at a byte offset before the draw. The cost is the attribute
+    /// re-binding the draw already does, which is why a caller can afford one draw per group.</para>
+    ///
+    /// <para>The motivating consumer is a spatially-chunked star field, where the buffer is grouped
+    /// by sky region so a view can submit only the regions it can see.</para>
+    /// </summary>
+    public void DrawInstanced(GpuBufferHandle vertices, int vertexCount, GpuBufferHandle instances, int instanceCount, int firstInstance = 0)
+        => Surface.Emit(Opcode.DrawInstanced, [vertices.Id, vertexCount, instances.Id, instanceCount, firstInstance]);
 }

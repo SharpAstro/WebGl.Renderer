@@ -111,9 +111,40 @@ public sealed class CustomPipelineTests
         cmds[2].Slots[1].ShouldBe(6);
         cmds[2].Slots[2].ShouldBe(stars.Id);
         cmds[2].Slots[3].ShouldBe(5);
+        cmds[2].Slots[4].ShouldBe(0); // firstInstance defaults to the whole buffer
         cmds[3].Op.ShouldBe(Opcode.DrawBuffer);
         cmds[3].Slots[0].ShouldBe(quad.Id);
         cmds[3].Slots[2].ShouldBe(3);
+    }
+
+    /// <summary>
+    /// One persistent instance buffer drawn as several ranges, which is how a caller submits only the
+    /// groups a view can see. The offset has to reach the record, because WebGL2 cannot express it as
+    /// a draw argument at all: the JS side turns it into a per-instance attribute byte offset, so a
+    /// value silently dropped here would draw the FIRST group every time and look merely wrong rather
+    /// than broken.
+    /// </summary>
+    [Fact]
+    public void DrawInstanced_CarriesFirstInstanceSoOneBufferCanBeDrawnAsRanges()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        var star = renderer.RegisterPipeline(StarLike);
+        var quad = renderer.CreateBuffer([0f, 0f, 1f, 0f, 1f, 1f]);
+        var stars = renderer.CreateBuffer(new float[3 * 100]);
+
+        renderer.Clear(new RGBAColor32(0, 0, 0, 255));
+        renderer.UsePipeline(star);
+        renderer.DrawInstanced(quad, vertexCount: 6, instances: stars, instanceCount: 40, firstInstance: 0);
+        renderer.DrawInstanced(quad, vertexCount: 6, instances: stars, instanceCount: 25, firstInstance: 60);
+        renderer.Present();
+
+        var cmds = Cmd.Decode(bridge.Flushes[^1].Commands);
+        var draws = cmds.Where(c => c.Op == Opcode.DrawInstanced).ToArray();
+        draws.Length.ShouldBe(2);
+        draws[0].Slots[3].ShouldBe(40);
+        draws[0].Slots[4].ShouldBe(0);
+        draws[1].Slots[3].ShouldBe(25);
+        draws[1].Slots[4].ShouldBe(60);
     }
 
     [Fact]

@@ -98,6 +98,16 @@ env:
   #        since 1.12. Nothing backend-specific: 7.29's breaking surface is the widget layer (text-field
   #        rendering, per-window settings, the typed dropdown) and this is a Renderer implementation,
   #        which touches none of it.
+  # 1.24 - DrawInstanced takes a firstInstance offset, so ONE persistent instance buffer can be drawn
+  #        as several independent ranges. Binary-breaking (an added optional parameter), source-compatible.
+  #        WebGL2 has no baseInstance draw argument -- that is desktop GL 4.2 and WebGL2 never picked it
+  #        up -- so it is expressed the only way the API allows: the per-instance attributes are pointed
+  #        at firstInstance * iStride before the draw, which is exactly equivalent for a divisor-1
+  #        attribute and costs nothing extra, since the draw re-binds those attributes anyway.
+  #        Motivating consumer: a spatially-chunked star field that submits only the sky regions a view
+  #        can see. Without an offset its only options were one draw over the whole buffer (which is
+  #        what TianWen's web atlas did -- 2.5M instances every frame regardless of the view) or a
+  #        separate buffer per chunk.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
