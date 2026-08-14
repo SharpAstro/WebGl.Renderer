@@ -108,6 +108,23 @@ env:
   #        can see. Without an offset its only options were one draw over the whole buffer (which is
   #        what TianWen's web atlas did -- 2.5M instances every frame regardless of the view) or a
   #        separate buffer per chunk.
+  # 1.25 - A finger no longer costs a wasted interop crossing per move, and DIR.Lib goes to 8.0.
+  #        A touch reaches a consumer TWICE: once as the touch events webgl-canvas.js bridges, and once
+  #        as the pointer stream, which fires for touch as well. WebGlCanvas.HandlePointerMoveAsync
+  #        already discarded the second (IsBridgedTouch), so behaviour was right -- but it discarded it
+  #        only AFTER Blazor had serialized a full PointerEventArgs and crossed into .NET, which is the
+  #        whole cost of an event that was never going to be used. Measured in a Chrome trace of a real
+  #        touch session on a consumer: 812 pointermove dispatches, 0.657 s, ~0.81 ms each, every one
+  #        thrown away, about 5.6% of the main thread's busy time. The canvas now stops a touch-sourced
+  #        pointermove at the target, which works because Blazor DELEGATES (one listener per event type
+  #        on document) and uses the capture phase only for its non-bubbling set, which pointermove is
+  #        not in. Mouse and pen are untouched: they have no bridge, so the pointer stream IS their
+  #        input. Pure optimization, not a behaviour change -- if Blazor ever stopped delegating, the
+  #        events would reach .NET again and IsBridgedTouch would discard them exactly as before.
+  #        DIR.Lib 8.0 is a follow with nothing to port: its one break is TabBar becoming a widget, which
+  #        this backend references zero times. Taken now because a consumer already pins 8.0, and a
+  #        backend still declaring 7.29 makes that consumer's graph unify DIR.Lib by version rather than
+  #        by intent, which is the arrangement this family keeps paying for when a member lags.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release
