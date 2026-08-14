@@ -94,6 +94,10 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
     public void Clear(RGBAColor32 background)
     {
         Surface.BeginFrame();
+        // The new stream carries no scissor, so the base must not still believe one is live: a widget
+        // that threw between its push and its pop would otherwise leave every later frame clipped to a
+        // rect nobody can name, which reads as content vanishing rather than as the bug behind it.
+        ResetClipStack();
         _activePipeline = null;
         _activeColor = null;
         _atlas.BeginFrame();
@@ -407,11 +411,16 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
         EmitEllipseQuad(in rect, strokeColor, innerRadius);
     }
 
-    // ---- clip (single-level by base-class contract) ---------------------------------------------------
+    // ---- clip ------------------------------------------------------------------------------------
+    // The base owns the region stack and hands down ONE absolute rect, already normalized and already
+    // intersected with every enclosing clip (DIR.Lib 7.27). So these are a straight translation to the
+    // scissor opcodes with no history and nothing to combine -- which is the whole point of the seam:
+    // a backend that got PushClip/PopClip instead had to intersect nested regions itself, and restoring
+    // the enclosing one meant re-pushing a rect the inner widget has no business knowing.
 
-    public override void PushClip(in RectInt rect)
+    protected override void ApplyClip(in RectInt rect)
         => Surface.Emit(Opcode.SetScissor,
             [rect.UpperLeft.X, rect.UpperLeft.Y, (int)rect.Width, (int)rect.Height]);
 
-    public override void PopClip() => Surface.Emit(Opcode.ClearScissor, []);
+    protected override void ClearClip() => Surface.Emit(Opcode.ClearScissor, []);
 }
