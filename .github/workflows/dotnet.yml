@@ -92,6 +92,12 @@ env:
   #        from the shared painter with no code of its own. Taken in the same cut as
   #        SdlVulkan.Renderer 7.14: the family lands together or it does not land.
   # 1.21 - Follows DIR.Lib to 7.21 with the rest of the family. Nothing backend-specific.
+  # 1.23 - Follows DIR.Lib to 7.29, closing a two-minor lag: this backend sat on 7.27 while the rest of
+  #        the family moved to 7.28, so the package graph was unifying DIR.Lib by taking the highest
+  #        version rather than by intent -- the standing smell this repo's pin comment has warned about
+  #        since 1.12. Nothing backend-specific: 7.29's breaking surface is the widget layer (text-field
+  #        rendering, per-window settings, the typed dropdown) and this is a Renderer implementation,
+  #        which touches none of it.
   VERSION_REV: ${{ github.run_attempt }}
   VERSION_HASH: +${{ github.sha }}
   BUILD_CONF: Release

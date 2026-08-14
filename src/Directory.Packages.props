@@ -8,7 +8,7 @@
     <!-- 7.27 is a FLOOR, not a follow: it moved clipping's region bookkeeping into the base, so
          PushClip/PopClip are no longer virtual and a backend implements ApplyClip/ClearClip instead.
          This renderer cannot compile against anything older. -->
-    <PackageVersion Include="DIR.Lib" Version="7.27.*" />
+    <PackageVersion Include="DIR.Lib" Version="7.29.*" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
   </ItemGroup>
