@@ -42,6 +42,17 @@ CI restores DIR.Lib from NuGet. Verify pin changes with `-p:UseLocalDirLib=false
 
 ## Release
 
-CI publishes `X.Y.<run_number>` to NuGet on main push (`VERSION_PREFIX` in
-`.github/workflows/dotnet.yml` + `VersionPrefix` in the csproj must bump together).
+CI publishes `X.Y.<run_number>` to NuGet on main push.
+
+**A release bump is ONE line:** `<VersionMajorMinor>` in `src/Directory.Build.props`. Everything else
+derives from it and must not be hand-edited — `VersionPrefix` (guarded on empty so CI's `-p:Version`
+wins), `AssemblyVersion` as `$(VersionMajorMinor).0.0`, and the workflow's `VERSION_PREFIX`, which the
+build job RESOLVES by reading the property back (`dotnet msbuild src/Directory.Build.props
+-getProperty:VersionMajorMinor`) rather than restating it. So CI cannot stamp a version the packages
+disagree with, and **no csproj declares a `VersionPrefix` of its own** — one that did would silently
+win. (This doc used to say the workflow and the csproj "must bump together"; neither of those two
+places holds a number any more.)
+The matching release note goes in [CHANGELOG.md](CHANGELOG.md) at the repo root, newest first, one
+`## Major.Minor` section each. (It used to live in a comment block in the workflow's `env:`; nothing
+ever read it there, and it had grown to 120 of that file's 199 lines.)
 Consumed by the chess repo via floating pin — see chess's `release-lib` skill for the chain.
