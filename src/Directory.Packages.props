@@ -1,20 +1,11 @@
 ﻿<Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <!-- Floating X.Y.* pins so DIR.Lib build-counter republishes flow in on restore. -->
+
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <!-- 7.27 is a FLOOR, not a follow: it moved clipping's region bookkeeping into the base, so
-         PushClip/PopClip are no longer virtual and a backend implements ApplyClip/ClearClip instead.
-         This renderer cannot compile against anything older.
-         8.0 is a follow, and there is nothing to port: its one breaking change is TabBar becoming
-         TabBar&lt;TSurface&gt; : PixelWidgetBase&lt;TSurface&gt;, which this backend references zero
-         times (as do Console.Lib and SdlVulkan.Renderer). Taken now because a consumer already pins
-         DIR.Lib 8.0, and a backend left declaring 7.29 makes that consumer's graph unify DIR.Lib
-         upward by version rather than by intent. That is the arrangement this family keeps paying
-         for when a member lags, so it moves in the same cut as the pointer fix below. -->
-    <PackageVersion Include="DIR.Lib" Version="8.0.*" />
+    <PackageVersion Include="DIR.Lib" Version="8.3.*" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
   </ItemGroup>

@@ -6,6 +6,17 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.26
+
+Follows DIR.Lib to 8.3, with nothing to port -- the tab strip becomes a shared Layout tree
+(TabStripTree), plus CompositeWidget&lt;TSurface&gt; and IconKind.Plus / Minus, all additive over the
+8.0 this already declared.
+
+Same reason as the 8.0 bump one entry down, and it is worth restating because it is the reason this
+family bumps pins it does not need: a consumer pins 8.3, so a backend declaring 8.0 makes that
+consumer's graph unify DIR.Lib upward BY VERSION rather than by intent. The resolve is right by
+accident either way; declaring it is what makes it right on purpose.
+
 ## 1.25
 
 A finger no longer costs a wasted interop crossing per move, and DIR.Lib goes to 8.0.
