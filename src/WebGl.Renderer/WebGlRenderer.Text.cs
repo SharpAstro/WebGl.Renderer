@@ -57,7 +57,7 @@ public sealed partial class WebGlRenderer
 
         var lineCount = text.Count('\n') + 1;
         var glyphScale = _atlas.GetGlyphScale(fontSize);
-        var lineHeight = fontSize * 1.3f;
+        var lineHeight = TextBaseline.LineHeight(fontSize);
         var totalHeight = lineCount * lineHeight;
 
         var layoutX = (float)layout.UpperLeft.X;
@@ -117,9 +117,15 @@ public sealed partial class WebGlRenderer
             };
             var penY = startY + lineIdx * lineHeight;
 
-            // Visual centering on the line's actual ascent/descent — identical formula across
-            // RgbaImageRenderer / VkRenderer / here.
-            var baseline = penY + (lineHeight + maxAscent - maxDescent) / 2f;
+            // The FACE's metrics, not this run's ink -- the formula itself now lives in
+            // DIR.Lib.TextBaseline rather than being restated here, which is what let the four copies
+            // drift. Note the DOM overlay (CanvasTextLayer) already centres by CSS line box, so this
+            // also brings the rastered text into agreement with the selectable text drawn over it.
+            var faceMetrics = _atlas.Rasterizer.GetVerticalMetrics(fontFamily, fontSize);
+            var (baseAscent, baseDescent) = faceMetrics is { } fm
+                ? (fm.Ascent, fm.Descent)
+                : (maxAscent, maxDescent);
+            var baseline = penY + TextBaseline.WithinLine(lineHeight, baseAscent, baseDescent);
 
             // Pass 2: emit glyph quads into per-page buckets.
             foreach (ref readonly var sg in CollectionsMarshal.AsSpan(_shapedLine))
