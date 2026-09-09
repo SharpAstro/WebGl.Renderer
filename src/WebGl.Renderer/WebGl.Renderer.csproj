@@ -9,6 +9,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Description>WebGL2 rendering backend for DIR.Lib's Renderer&lt;TSurface&gt; — Blazor WebAssembly, command-buffer JS interop, MSDF text via the shared SdfFontAtlas core. AOT compatible.</Description>
+    <PackageTags>webgl webgl2 blazor webassembly rendering msdf text aot</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/SharpAstro/WebGl.Renderer</RepositoryUrl>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
