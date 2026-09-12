@@ -6,6 +6,17 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.28
+
+Rebuilt against **DIR.Lib 8.19**, from 8.13, so this backend is compiled and tested against the
+version a consumer will actually load rather than relying on NuGet unifying it upward.
+
+Nothing here needed code. The six minors crossed are additive or fixes — the icon family grew
+(`Search`, `Pan`, `IBeam`), `FloatingPalette` arrived and was finished, a text selection's fill moved
+under its glyphs, and SharpAstro.Fonts 1.12 capped TrueType hinting recursion so a self-calling font
+program can no longer exhaust the stack. The one flagged behaviour change in the range, 8.13's move
+of the text baseline onto the face, was already this backend's own 1.27 work.
+
 ## 1.27
 
 Follows DIR.Lib 8.13, whose `DrawText` now seats the baseline on the FACE's metrics instead of on the
