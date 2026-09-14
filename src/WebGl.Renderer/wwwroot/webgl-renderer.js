@@ -31,6 +31,7 @@ const OP = {
   Draw: 12,
   DrawBuffer: 13,
   DrawInstanced: 14,
+  SetContentTransform: 15,
 };
 
 /**
@@ -76,7 +77,9 @@ const ATTRIBS = [
  *             buffers: (WebGLBuffer | null)[],
  *             vbo: WebGLBuffer,
  *             proj: Float32Array,
+ *             viewportW: number,
  *             viewportH: number,
+ *             ct: Float32Array,
  *             enabledLocs: Set<number> }} Surface
  */
 
@@ -128,7 +131,10 @@ export function initContext(canvasId) {
     buffers: [],
     vbo,
     proj: new Float32Array(16),
+    viewportW: canvas.width,
     viewportH: canvas.height,
+    // content→device affine [m11, m12, m21, m22, m31, m32]; identity until .NET says otherwise.
+    ct: new Float32Array([1, 0, 0, 1, 0, 0]),
     enabledLocs: new Set(),
   };
   gl.enable(gl.BLEND);
@@ -327,15 +333,44 @@ function link(gl, vsSource, fsSource) {
 
 /** @param {Surface} s @param {number} w @param {number} h */
 function setViewport(s, w, h) {
+  s.viewportW = w;
   s.viewportH = h;
   s.gl.viewport(0, 0, w, h);
-  // Screen-space ortho with the GL NDC Y-flip (Vulkan's NDC Y points down, m11 = 2/h, m31 = -1;
-  // GL's Y points up so that row negates): column-major mat4.
+  rebuildProjection(s);
+}
+
+/**
+ * Rebuild `s.proj` from the current viewport and content transform. Both inputs change
+ * independently — a resize, or a host flipping the frame — so each setter stores its value and calls
+ * this, rather than trying to patch a matrix in place.
+ *
+ * @param {Surface} s
+ */
+function rebuildProjection(s) {
+  const w = s.viewportW, h = s.viewportH;
+
+  // Screen-space ortho with the GL NDC Y-flip (Vulkan's NDC Y points down, m22 = 2/h, m32 = -1;
+  // GL's Y points up so that row negates), as a 2D affine in the row-vector convention
+  // System.Numerics.Matrix3x2 uses: (x, y) -> (x*m11 + y*m21 + m31, x*m12 + y*m22 + m32).
+  const p11 = 2 / w, p22 = -2 / h, p31 = -1, p32 = 1;
+
+  // Fold the content→device affine in FRONT of it: content -> device -> NDC. This mirrors
+  // VkRenderer.UpdateProjection's `_contentTransform.ToMatrix3x2() * proj`, and it stays 2x3 because
+  // both operands are pure affines. The ortho has no skew (p12 = p21 = 0), so the four products that
+  // would involve them are dropped rather than written as multiplications by zero.
+  const c = s.ct;
+  const m11 = c[0] * p11, m12 = c[1] * p22;
+  const m21 = c[2] * p11, m22 = c[3] * p22;
+  const m31 = c[4] * p11 + p31, m32 = c[5] * p22 + p32;
+
+  // Widen into the column-major mat4 the vertex shaders multiply (gl_Position = uProj * vec4(pos,0,1)):
+  // linear part in slots 0/1/4/5, translation in the last column, z/w rows constant. All geometry is
+  // z = 0, so m22 = -1 leaves clip.z = 0. An identity transform reproduces the plain ortho exactly.
   s.proj.set([
-    2 / w, 0, 0, 0,
-    0, -2 / h, 0, 0,
+    m11, m12, 0, 0,
+    m21, m22, 0, 0,
     0, 0, -1, 0,
-    -1, 1, 0, 1,
+    m31, m32, 0, 1,
   ]);
 }
 
@@ -423,6 +458,14 @@ export function flush(surfaceId, commands, vertexBytes) {
         if (s.canvas.width !== w) s.canvas.width = w;
         if (s.canvas.height !== h) s.canvas.height = h;
         setViewport(s, w, h);
+        if (pipeline) applyPipelineUniforms(s, pipeline); // re-push the rebuilt projection
+        break;
+      }
+      case OP.SetContentTransform: {
+        // Stored, not applied once: a later SetViewport rebuilds the projection and must fold the
+        // same transform back in. .NET sends this only when the value changes.
+        s.ct.set([cmdsF[b + 1], cmdsF[b + 2], cmdsF[b + 3], cmdsF[b + 4], cmdsF[b + 5], cmdsF[b + 6]]);
+        rebuildProjection(s);
         if (pipeline) applyPipelineUniforms(s, pipeline); // re-push the rebuilt projection
         break;
       }

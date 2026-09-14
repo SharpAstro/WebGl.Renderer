@@ -6,6 +6,30 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.29
+
+**`ContentTransform` is now applied, not just stored** — phase 1b of chess's content-transform plan,
+and the last backend that ignored it. A host can rotate the whole frame in 90° steps, scale it
+uniformly and translate it, and text turns with everything else because glyph quads go through the
+same projection.
+
+The transform crosses the bridge as its six affine coefficients (new opcode `SetContentTransform`),
+not as a finished matrix, and the compose happens in `webgl-renderer.js`. That split is deliberate:
+the projection is JS-side because that is where the GL NDC Y-flip lives, and because JS builds a
+projection at surface creation, before .NET has sent a single command — so whatever composes the two
+has to be able to rebuild on its own. It does: the surface stores the transform and re-folds it every
+time the projection is rebuilt, so a resize does not need .NET to re-send anything.
+
+**Nothing changes for a consumer that never sets one.** The command is emitted only when the value
+changes, and the identity reproduces the previous projection exactly, so an existing host's command
+stream is byte-identical to what it was.
+
+Verification is split the same way the code is. Nine tests cover the wire contract and the emission
+policy (which six numbers, in which order, and on which frames). The compose itself is JS, which this
+repo's CI does not run, so it was checked by executing the shipped function against an independent
+transform-then-project reference over 16,000 points across all four rotations, five scales and random
+viewports — agreement to 1.7e-5, which is float32 storage rounding.
+
 ## 1.28
 
 Rebuilt against **DIR.Lib 8.19**, from 8.13, so this backend is compiled and tested against the

@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace WebGl.Renderer;
 
 /// <summary>
@@ -31,6 +33,14 @@ public sealed class WebGlContext
     // by the NEXT BeginFrame(). See the Resize/BeginFrame comments for why the viewport can't be
     // emitted from Resize() directly.
     private bool _viewportDirty;
+
+    // The content→device affine, and whether JS has yet been told the current value. Deferred for the
+    // same reason as the viewport: a consumer sets the transform OUTSIDE a frame, and the
+    // Clear() -> BeginFrame() that opens the next one would discard a command emitted eagerly.
+    // Starts clean at Identity, so a consumer that never touches it emits nothing at all and its
+    // command stream is byte-identical to one from before this existed.
+    private Matrix3x2 _contentTransform = Matrix3x2.Identity;
+    private bool _contentTransformDirty;
 
     // Per-frame draw stream, reset by BeginFrame(). Ints and floats grow independently;
     // Draw records index the vertex stream in vertex units.
@@ -70,6 +80,31 @@ public sealed class WebGlContext
             Emit(Opcode.SetViewport, [(int)Width, (int)Height]);
             _viewportDirty = false;
         }
+        // After the viewport, because a SetViewport rebuilds the projection from the surface's stored
+        // transform -- so on a frame where both changed, this order sends the new size first and then
+        // the new transform, and the last rebuild sees both. (JS stores each independently, so the
+        // reverse order also converges; this one just never depends on that.)
+        if (_contentTransformDirty)
+        {
+            Emit(Opcode.SetContentTransform, [
+                F(_contentTransform.M11), F(_contentTransform.M12),
+                F(_contentTransform.M21), F(_contentTransform.M22),
+                F(_contentTransform.M31), F(_contentTransform.M32)]);
+            _contentTransformDirty = false;
+        }
+    }
+
+    /// <summary>
+    /// Record a new content→device affine, to be sent at the next <see cref="BeginFrame"/>. A value
+    /// equal to the current one is dropped: the transform is set per frame by a consumer that flips it
+    /// on a turn boundary, so the steady state is "same as last time" and that must not add a record
+    /// to every frame's stream.
+    /// </summary>
+    internal void SetContentTransform(Matrix3x2 transform)
+    {
+        if (_contentTransform == transform) return;
+        _contentTransform = transform;
+        _contentTransformDirty = true;
     }
 
     internal void ClearAtlasStream()

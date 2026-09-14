@@ -131,6 +131,26 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
         Surface.Resize(width, height);
     }
 
+    /// <summary>
+    /// The content→device transform, folded into the projection so the whole frame — text included —
+    /// rotates and scales as one. This is the WebGL half of what the Vulkan backend does in
+    /// <c>VkRenderer.UpdateProjection</c>; with it a browser host can do the across-the-table 180°
+    /// that Android already does.
+    /// <para>Only the six affine coefficients cross the bridge, not a finished matrix: the projection
+    /// stays JS-side, because that is where the GL NDC Y-flip lives, and because JS builds a projection
+    /// at surface creation — before .NET has sent a single command — so whatever composes the two has
+    /// to be able to rebuild on its own.</para>
+    /// </summary>
+    public override ContentTransform ContentTransform
+    {
+        get => base.ContentTransform;
+        set
+        {
+            base.ContentTransform = value;
+            Surface.SetContentTransform(value.ToMatrix3x2());
+        }
+    }
+
     public override void Dispose()
     {
         _atlas.Dispose();   // fires OnPageDestroyed per page into the (now-moot) atlas stream

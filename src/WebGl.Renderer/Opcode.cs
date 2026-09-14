@@ -67,6 +67,18 @@ public enum Opcode
     /// attributes from the first persistent buffer (divisor 0), per-instance attributes from
     /// the second (divisor 1). Both buffers persistent — a pan/zoom re-uploads only the UBO.</summary>
     DrawInstanced = 14,
+
+    /// <summary>m11, m12, m21, m22, m31, m32 (f32) — the content→device affine from
+    /// <see cref="DIR.Lib.Renderer{TSurface}.ContentTransform"/>, in the row-vector convention
+    /// <c>System.Numerics.Matrix3x2</c> uses. JS stores it on the surface and folds it in FRONT of the
+    /// screen→NDC projection, so the whole frame — text included — rotates and scales as one.
+    /// <para>Stored JS-side rather than applied once, because the projection is rebuilt whenever the
+    /// viewport changes; and the transform is sent as the affine rather than as a finished matrix
+    /// because JS owns the projection (it builds one at surface creation, before .NET has sent
+    /// anything) and with it the GL NDC Y-flip.</para>
+    /// <para>Emitted only when the value CHANGES, so a consumer that never sets a transform produces
+    /// the same byte stream it did before this opcode existed.</para></summary>
+    SetContentTransform = 15,
 }
 
 /// <summary>
