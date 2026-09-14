@@ -8,6 +8,10 @@ this file disagrees with. Bump it there and add the entry here, in the same comm
 
 ## 1.29
 
+Rebuilt against **DIR.Lib 9.0** (from 8.19). Its break is in the pre-layout scale's currency, and this
+backend calls none of the affected APIs — it is repinned so a consumer holding several backends cannot
+end up unifying two DIR.Lib majors by luck.
+
 **`ContentTransform` is now applied, not just stored** — phase 1b of chess's content-transform plan,
 and the last backend that ignored it. A host can rotate the whole frame in 90° steps, scale it
 uniformly and translate it, and text turns with everything else because glyph quads go through the
