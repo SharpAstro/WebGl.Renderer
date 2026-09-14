@@ -466,7 +466,10 @@ export function flush(surfaceId, commands, vertexBytes) {
         // same transform back in. .NET sends this only when the value changes.
         s.ct.set([cmdsF[b + 1], cmdsF[b + 2], cmdsF[b + 3], cmdsF[b + 4], cmdsF[b + 5], cmdsF[b + 6]]);
         rebuildProjection(s);
-        if (pipeline) applyPipelineUniforms(s, pipeline); // re-push the rebuilt projection
+        // re-push the rebuilt projection
+        if (pipeline) {
+          applyPipelineUniforms(s, pipeline);
+        }
         break;
       }
       case OP.Clear:

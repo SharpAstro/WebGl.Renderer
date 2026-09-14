@@ -35,7 +35,13 @@ public sealed class ContentTransformEncodingTests
     private static Cmd? TransformIn(List<Cmd> cmds)
     {
         foreach (var c in cmds)
-            if (c.Op == Opcode.SetContentTransform) return c;
+        {
+            if (c.Op == Opcode.SetContentTransform)
+            {
+                return c;
+            }
+        }
+
         return null;
     }
 

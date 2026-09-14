@@ -102,7 +102,11 @@ public sealed class WebGlContext
     /// </summary>
     internal void SetContentTransform(Matrix3x2 transform)
     {
-        if (_contentTransform == transform) return;
+        if (_contentTransform == transform)
+        {
+            return;
+        }
+
         _contentTransform = transform;
         _contentTransformDirty = true;
     }
