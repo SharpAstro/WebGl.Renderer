@@ -34,6 +34,14 @@ repo's CI does not run, so it was checked by executing the shipped function agai
 transform-then-project reference over 16,000 points across all four rotations, five scales and random
 viewports — agreement to 1.7e-5, which is float32 storage rounding.
 
+*Later in 1.29:* republished so the **DIR.Lib floor this package declares** moves onto the 9.0 build
+that takes `SharpAstro.Fonts` 1.12.901, and with it `SharpAstro.Png` 3.14. Nothing here changed: the
+pin is `9.0.*` and floats onto it by itself. The publish is the whole of it. A package declares the
+floor its own pack resolved, and NuGet hands a consumer exactly that floor for a transitive
+dependency, never the newest — so anyone reaching Png only through this backend was restoring a
+decoder six published families behind the Codecs repo, and would have kept restoring it however often
+Fonts.Lib or DIR.Lib republished.
+
 ## 1.28
 
 Rebuilt against **DIR.Lib 8.19**, from 8.13, so this backend is compiled and tested against the
