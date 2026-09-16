@@ -6,6 +6,17 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.31
+
+**Rebuilt against DIR.Lib 9.4.** One minor this time, not three: `Layout.Node.Wrap` gained
+`FirstLineReserve` (the FIRST line stops short, so a run flows under a floated corner rather than
+beside it on every line the way a `Dock` would), `LeadingGap` on a child (group separation that is
+suppressed when the child begins a line) and `MaxLines` (the tail is DROPPED past the cap rather than
+clipped, because a clipped child still registers its region and keeps taking the clicks aimed at what
+covers it). All three are engine-level, so the DOM surface gets them for free.
+
+A currency rebuild: nothing here calls them yet.
+
 ## 1.30
 
 **Rebuilt against DIR.Lib 9.3**, from 9.0 -- so this one crosses three minors, not one. It picks up 9.1's
