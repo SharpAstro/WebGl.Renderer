@@ -6,6 +6,19 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.30
+
+**Rebuilt against DIR.Lib 9.3**, from 9.0 -- so this one crosses three minors, not one. It picks up 9.1's
+pointer rule, 9.2's `InputRouter` / `Popover` / `Content.Slider` wave and 9.3's `Layout.Builder.Dropdown`,
+none of which this renderer calls yet; what it gains today is being on the same engine as the rest of the
+chain.
+
+Sitting on 9.0 was the risk, not the move off it. 9.1 added an optional parameter to a record's primary
+constructor, which is source-compatible and a BINARY break: a consumer left on the old build throws
+`MissingMethodException` against the published package while compiling perfectly against a sibling
+checkout. `UseLocalDirLib` means a dev box never exercises the difference, so the gap can widen for three
+minors without anything failing locally -- which is what happened here.
+
 ## 1.29
 
 Rebuilt against **DIR.Lib 9.0** (from 8.19). Its break is in the pre-layout scale's currency, and this
