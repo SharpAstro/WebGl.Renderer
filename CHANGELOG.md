@@ -6,6 +6,21 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.32
+
+**Rebuilt against DIR.Lib 10.0**, which cut seven things the 9.x line had kept alive for consumers that
+had stopped using them. **Not one of them reaches this library**: no source file changed, and the Debug
+build -- the one that would report a cut inside a `#if DEBUG` block, as it did for SdlVulkan.Renderer's
+inspector -- is clean too.
+
+That is the useful thing to record. The DOM surface takes its behaviour from the shared engine, so a
+release that REMOVES a pixel-host seam (`IPixelWidget.HitTestAndDispatch`, `IKeyboardClaimant`,
+`PixelWidgetBase.RenderDropdownMenu`) touches nothing here by construction, and the declared dependency
+range is the whole of the change.
+
+A minor, as every rebuild across a DIR.Lib major has been here: 9.0 was breaking and this library went
+1.x to 1.x through it.
+
 ## 1.31
 
 **Rebuilt against DIR.Lib 9.4.** One minor this time, not three: `Layout.Node.Wrap` gained
