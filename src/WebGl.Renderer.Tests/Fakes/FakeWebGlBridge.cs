@@ -83,6 +83,23 @@ public sealed class FakeWebGlBridge : IWebGlBridge
         UniformBlocks.Add((pipelineId, data.ToArray()));
     }
 
+    public readonly List<(string Url, int WrapS, int WrapT)> LoadedTextures = new();
+    public readonly List<int> DestroyedTextures = new();
+
+    public Task<int> LoadImageTextureAsync(int surfaceId, string url, int wrapS, int wrapT)
+    {
+        Calls.Add($"loadImageTexture:{url}");
+        LoadedTextures.Add((url, wrapS, wrapT));
+        // Ids are slot indices in the JS texture table, which never renumbers.
+        return Task.FromResult(LoadedTextures.Count - 1);
+    }
+
+    public void DestroyImageTexture(int surfaceId, int textureId)
+    {
+        Calls.Add($"destroyImageTexture:{textureId}");
+        DestroyedTextures.Add(textureId);
+    }
+
     public void DisposeContext(int surfaceId) => Calls.Add("dispose");
 }
 

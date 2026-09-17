@@ -6,6 +6,31 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.33
+
+**A custom pipeline can sample an image.** `LoadTextureAsync(url, wrapS, wrapT)` fetches an image and
+uploads it as an RGBA8 texture, `BindTexture(handle)` puts it on unit 0 for the draws that follow (the
+unit every program's `uTexture` already reads), and `DestroyTexture` deletes it. Additive: nothing that
+existed changes, and a consumer that never loads a texture emits the same byte stream as before.
+
+Until now the only textures were the SDF atlas pages, so a consumer with a baked texture had no way to
+draw it: TianWen's browser sky map could not show the Milky Way background its desktop sibling draws.
+
+Three decisions worth knowing:
+
+- **The browser decodes, with `premultiplyAlpha` and `colorSpaceConversion` both `"none"`.** The image
+  goes through `createImageBitmap`, off the main thread, and the texels are the file's own bytes. A
+  consumer ships a PNG and the browser's decoder does the work, instead of a WebAssembly module
+  decompressing raw bytes and handing megabytes across the interop boundary.
+- **Consumer textures have their own table and their own bind opcode (`BindImageTexture`, 16).** An atlas
+  page destroy splices the page table, which renumbers it; a consumer handle held across that would point
+  at a different texture. Here a destroy nulls the slot, as for buffers.
+- **Bind every frame.** Text draws bind atlas pages to the same unit, so a binding does not survive into
+  the next frame's stream.
+
+Also new: `OpcodeWireProtocolTests` reads the shipped `webgl-renderer.js` and holds its `OP` table to the
+`Opcode` enum, names and numbers both ways. Nothing held them together before.
+
 ## 1.32
 
 **Rebuilt against DIR.Lib 10.0**, which cut seven things the 9.x line had kept alive for consumers that

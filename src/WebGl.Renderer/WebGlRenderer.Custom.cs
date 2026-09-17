@@ -82,4 +82,30 @@ public sealed partial class WebGlRenderer
     /// </summary>
     public void DrawInstanced(GpuBufferHandle vertices, int vertexCount, GpuBufferHandle instances, int instanceCount, int firstInstance = 0)
         => Surface.Emit(Opcode.DrawInstanced, [vertices.Id, vertexCount, instances.Id, instanceCount, firstInstance]);
+
+    /// <summary>
+    /// Fetches an image from <paramref name="url"/> (resolved against the document base) and uploads it
+    /// as an RGBA8 texture a custom pipeline can sample through <c>uniform sampler2D uTexture</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>The browser decodes the image, off the main thread, with no premultiplication and no colour
+    /// conversion, so the texels are the file's own bytes. That is the point of the seam: a baked texture
+    /// (a sky background, a data map) ships as a PNG the browser decodes natively, instead of as raw bytes
+    /// a WebAssembly module has to decompress and hand across.</para>
+    /// <para>Linear filtering, no mipmaps. Faults when the request fails or the image cannot be decoded;
+    /// a consumer that treats the texture as optional catches that and carries on without it.</para>
+    /// </remarks>
+    public async Task<TextureHandle> LoadTextureAsync(string url,
+        TextureWrap wrapS = TextureWrap.ClampToEdge, TextureWrap wrapT = TextureWrap.ClampToEdge)
+        => new(await _bridge.LoadImageTextureAsync(Surface.SurfaceId, url, (int)wrapS, (int)wrapT));
+
+    /// <summary>
+    /// Binds a consumer texture to unit 0 for the draw records that follow. Emit it after
+    /// <see cref="UsePipeline"/> and before the draw, every frame: text draws bind atlas pages to the
+    /// same unit, so a binding does not survive into the next frame's stream.
+    /// </summary>
+    public void BindTexture(TextureHandle texture) => Surface.Emit(Opcode.BindImageTexture, [texture.Id]);
+
+    /// <summary>Deletes a consumer texture. The handle must not be bound afterwards.</summary>
+    public void DestroyTexture(TextureHandle texture) => _bridge.DestroyImageTexture(Surface.SurfaceId, texture.Id);
 }
