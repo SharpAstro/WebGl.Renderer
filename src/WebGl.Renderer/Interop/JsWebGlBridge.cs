@@ -44,6 +44,11 @@ internal sealed partial class JsWebGlBridge : IWebGlBridge
     public void SetUniformBlock(int surfaceId, int pipelineId, ReadOnlySpan<byte> data)
         => Js.SetUniformBlock(surfaceId, pipelineId, data);
 
+    public Task<int> LoadImageTextureAsync(int surfaceId, string url, int wrapS, int wrapT)
+        => Js.LoadImageTexture(surfaceId, url, wrapS, wrapT);
+
+    public void DestroyImageTexture(int surfaceId, int textureId) => Js.DestroyImageTexture(surfaceId, textureId);
+
     public void DisposeContext(int surfaceId) => Js.DisposeContext(surfaceId);
 
     private static partial class Js
@@ -94,6 +99,13 @@ internal sealed partial class JsWebGlBridge : IWebGlBridge
         [JSImport("setUniformBlock", ModuleName)]
         public static partial void SetUniformBlock(int surfaceId, int pipelineId,
             [JSMarshalAs<JSType.MemoryView>] Span<byte> data);
+
+        [JSImport("loadImageTexture", ModuleName)]
+        [return: JSMarshalAs<JSType.Promise<JSType.Number>>]
+        public static partial Task<int> LoadImageTexture(int surfaceId, string url, int wrapS, int wrapT);
+
+        [JSImport("destroyImageTexture", ModuleName)]
+        public static partial void DestroyImageTexture(int surfaceId, int textureId);
 
         [JSImport("disposeContext", ModuleName)]
         public static partial void DisposeContext(int surfaceId);

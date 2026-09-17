@@ -30,6 +30,8 @@
 
   <ItemGroup>
     <None Update="Fonts\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The shipped JS, so OpcodeWireProtocolTests can hold its OP table to the Opcode enum. -->
+    <None Include="..\WebGl.Renderer\wwwroot\webgl-renderer.js" Link="webgl-renderer.js" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

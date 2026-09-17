@@ -19,6 +19,9 @@ contract, same MTSDF text pipeline, same shared `SdfFontAtlas` core.
   the desktop Vulkan renderer. No CSS fonts, no canvas text APIs.
 - **The GL/Vulkan NDC Y-flip lives in the JS-side projection matrix** — shader bodies are
   byte-identical ports of VkPipelineSet's GLSL.
+- **Custom pipelines** (`RegisterPipeline`) bring their own GLSL ES 3.00, persistent buffers, a std140
+  uniform block and, since 1.33, images: `LoadTextureAsync` has the browser decode a URL into a texture
+  that `BindTexture` puts on unit 0 for the pipeline's `uTexture` sampler.
 - Pre-bake a `.sdfg` glyph cache at build time (see `SdfGlyphDiskCache`), fetch it into the WASM
   in-memory FS, and startup performs zero rasterization.
 

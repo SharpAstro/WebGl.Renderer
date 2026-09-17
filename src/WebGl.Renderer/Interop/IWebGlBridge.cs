@@ -4,8 +4,9 @@ namespace WebGl.Renderer.Interop;
 /// The JS boundary, abstracted so everything above it is testable on desktop .NET:
 /// <see cref="JsWebGlBridge"/> is the real <c>[JSImport]</c> wrapper (browser-wasm only);
 /// tests substitute a recording fake via the internal <see cref="WebGlRenderer"/> constructor.
-/// All methods are synchronous — module loading (the only inherently async step) happens in
-/// <see cref="WebGlRenderer.CreateAsync"/> before the bridge is ever called.
+/// All methods but <see cref="LoadImageTextureAsync"/> are synchronous — module loading happens in
+/// <see cref="WebGlRenderer.CreateAsync"/> before the bridge is ever called, and a texture load is
+/// asynchronous because the fetch and the image decode are.
 /// </summary>
 internal interface IWebGlBridge
 {
@@ -47,6 +48,14 @@ internal interface IWebGlBridge
     /// <summary>Upload a registered pipeline's std140 uniform block (per-frame view state —
     /// the pan/zoom hot path uploads these ~112 bytes instead of any geometry).</summary>
     void SetUniformBlock(int surfaceId, int pipelineId, ReadOnlySpan<byte> data);
+
+    /// <summary>Fetch and decode an image, upload it as a consumer texture; resolves to its id.
+    /// <paramref name="wrapS"/>/<paramref name="wrapT"/> are <see cref="TextureWrap"/> wire values.
+    /// The one asynchronous call on this bridge, because the fetch and the decode are.</summary>
+    Task<int> LoadImageTextureAsync(int surfaceId, string url, int wrapS, int wrapT);
+
+    /// <summary>Delete a consumer texture.</summary>
+    void DestroyImageTexture(int surfaceId, int textureId);
 
     /// <summary>Release the surface's GL objects and registry slot.</summary>
     void DisposeContext(int surfaceId);

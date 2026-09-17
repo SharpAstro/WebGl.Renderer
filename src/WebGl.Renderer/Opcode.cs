@@ -79,6 +79,12 @@ public enum Opcode
     /// <para>Emitted only when the value CHANGES, so a consumer that never sets a transform produces
     /// the same byte stream it did before this opcode existed.</para></summary>
     SetContentTransform = 15,
+
+    /// <summary>textureId (i32). Binds a CONSUMER texture (<see cref="WebGlRenderer.LoadTextureAsync"/>)
+    /// to unit 0, which every program's <c>uTexture</c> sampler reads. Distinct from
+    /// <see cref="BindTexture"/>, whose ids index the atlas page table: the two tables are kept apart
+    /// because a page destroy renumbers its table and a consumer handle must stay stable.</summary>
+    BindImageTexture = 16,
 }
 
 /// <summary>

@@ -32,6 +32,7 @@ const OP = {
   DrawBuffer: 13,
   DrawInstanced: 14,
   SetContentTransform: 15,
+  BindImageTexture: 16,
 };
 
 /**
@@ -74,6 +75,7 @@ const ATTRIBS = [
  *             gl: WebGL2RenderingContext,
  *             pipelines: Pipeline[],
  *             pages: (WebGLTexture | null)[],
+ *             textures: (WebGLTexture | null)[],
  *             buffers: (WebGLBuffer | null)[],
  *             vbo: WebGLBuffer,
  *             proj: Float32Array,
@@ -128,6 +130,7 @@ export function initContext(canvasId) {
     canvas, gl,
     pipelines: [],
     pages: [],
+    textures: [],
     buffers: [],
     vbo,
     proj: new Float32Array(16),
@@ -281,6 +284,60 @@ export function destroyBuffer(surfaceId, bufferId) {
   const buf = s.buffers[bufferId];
   if (buf) s.gl.deleteBuffer(buf);
   s.buffers[bufferId] = null;
+}
+
+/**
+ * Fetch an image and upload it as a consumer texture; resolves to its id.
+ *
+ * Decoded with createImageBitmap, which runs off the main thread, and with premultiplyAlpha and
+ * colorSpaceConversion both "none" so the texels are the file's bytes: a baked texture (a sky
+ * background, a data map) must arrive as baked, not colour-managed or premultiplied twice.
+ *
+ * Consumer textures live in their OWN table, never in `pages`: an atlas page destroy SPLICES that
+ * array (the atlas core tears down in descending order), which would renumber any id held in it.
+ * Here a destroy nulls the slot, as for buffers, so a handle stays stable.
+ *
+ * @param {number} surfaceId
+ * @param {string} url - resolved against the document base, like any fetch
+ * @param {number} wrapS - 0 CLAMP_TO_EDGE | 1 REPEAT (TextureWrap wire values)
+ * @param {number} wrapT - 0 CLAMP_TO_EDGE | 1 REPEAT
+ * @returns {Promise<number>} texture id
+ */
+export async function loadImageTexture(surfaceId, url, wrapS, wrapT) {
+  const s = surface(surfaceId);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`webgl-renderer: ${url} answered ${response.status}`);
+  const bitmap = await createImageBitmap(await response.blob(),
+    { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+  try {
+    // The awaits above yield: the surface may have been disposed (or its slot reused) meanwhile.
+    if (surfaces[surfaceId] !== s) throw new Error("webgl-renderer: surface disposed while a texture loaded");
+    const gl = s.gl;
+    const tex = gl.createTexture();
+    if (!tex) throw new Error("webgl-renderer: createTexture failed");
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapS === 1 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrapT === 1 ? gl.REPEAT : gl.CLAMP_TO_EDGE);
+    s.textures.push(tex);
+    return s.textures.length - 1;
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** @param {number} surfaceId @param {number} textureId */
+export function destroyImageTexture(surfaceId, textureId) {
+  const s = surface(surfaceId);
+  const tex = s.textures[textureId];
+  if (tex) s.gl.deleteTexture(tex);
+  s.textures[textureId] = null;
 }
 
 /**
@@ -491,6 +548,13 @@ export function flush(surfaceId, commands, vertexBytes) {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, s.pages[cmds[b + 1]]);
         break;
+      case OP.BindImageTexture: {
+        const tex = s.textures[cmds[b + 1]];
+        if (!tex) throw new Error(`webgl-renderer: unknown texture ${cmds[b + 1]}`);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        break;
+      }
       case OP.SetScissor: {
         // Command carries top-left-origin screen coords; GL scissor is bottom-left-origin.
         const x = cmds[b + 1], y = cmds[b + 2], w = cmds[b + 3], h = cmds[b + 4];
@@ -609,6 +673,7 @@ export function disposeContext(surfaceId) {
   if (!s) return;
   const gl = s.gl;
   for (const t of s.pages) if (t) gl.deleteTexture(t);
+  for (const t of s.textures) if (t) gl.deleteTexture(t);
   for (const b of s.buffers) if (b) gl.deleteBuffer(b);
   for (const p of s.pipelines) {
     gl.deleteProgram(p.program);

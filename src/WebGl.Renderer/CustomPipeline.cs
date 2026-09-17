@@ -35,6 +35,21 @@ public readonly record struct VertexAttrib(int Location, int Floats, bool PerIns
 /// automatically -- there is no constant to keep in step, only this sentence.</summary>
 public readonly record struct PipelineHandle(int Id);
 
+/// <summary>Texture coordinate wrapping on one axis of a consumer texture. Values are wire protocol.</summary>
+public enum TextureWrap
+{
+    /// <summary>Coordinates outside [0, 1] take the edge texel.</summary>
+    ClampToEdge = 0,
+
+    /// <summary>The texture tiles, so filtering across the 0/1 seam blends both edges -- e.g. the
+    /// right ascension axis of an equirectangular sky map, which has no edge.</summary>
+    Repeat = 1,
+}
+
+/// <summary>Handle to a consumer texture loaded via <see cref="WebGlRenderer.LoadTextureAsync"/>. Lives
+/// until destroyed or the surface disposes.</summary>
+public readonly record struct TextureHandle(int Id);
+
 /// <summary>Handle to a persistent GPU buffer created via
 /// <see cref="WebGlRenderer.CreateBuffer"/>. Lives until destroyed or the surface disposes.</summary>
 public readonly record struct GpuBufferHandle(int Id);
