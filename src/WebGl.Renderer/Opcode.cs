@@ -85,6 +85,24 @@ public enum Opcode
     /// <see cref="BindTexture"/>, whose ids index the atlas page table: the two tables are kept apart
     /// because a page destroy renumbers its table and a consumer handle must stay stable.</summary>
     BindImageTexture = 16,
+
+    /// <summary>pageId, dim (i32). Allocates a pageId-slotted RGBA8 WebGLTexture in the COLOUR-GLYPH
+    /// page table (<see cref="WebGlColorGlyphAtlas"/>) — a separate table from the SDF atlas's
+    /// (<see cref="CreatePage"/>), so the two never contend for the same id space.</summary>
+    CreateColorPage = 17,
+
+    /// <summary>pageId (i32). gl.deleteTexture on a colour-glyph page + removes the slot (same
+    /// descending-index contract as <see cref="DestroyPage"/>).</summary>
+    DestroyColorPage = 18,
+
+    /// <summary>pageId, x, y, w, h, transferOffset, transferLength (i32). texSubImage2D into a
+    /// colour-glyph page from a view over the transfer buffer — the <see cref="UploadTexSubImage"/>
+    /// analog for <see cref="WebGlColorGlyphAtlas"/>.</summary>
+    UploadColorTexSubImage = 19,
+
+    /// <summary>pageId (i32). Binds a colour-glyph atlas page to unit 0 for subsequent draws — the
+    /// <see cref="BindTexture"/> analog for the colour-glyph page table.</summary>
+    BindColorTexture = 20,
 }
 
 /// <summary>
@@ -104,4 +122,8 @@ public enum PipelineId
     /// <summary>Rounded-box fill, pos+localPx+halfPx+radiusPx(7f); no uExtra -- a rounded box needs
     /// three parameters, so they ride on the vertex attributes instead.</summary>
     RoundRect = 4,
+    /// <summary>Colour glyph (COLR/CBDT emoji), pos+uv(4f); samples the colour-glyph atlas page
+    /// bound via <see cref="Opcode.BindColorTexture"/>. Own RGB, alpha modulated by <c>uColor.a</c>
+    /// — the rule that lets a faded label fade its emoji too.</summary>
+    ColorGlyph = 5,
 }

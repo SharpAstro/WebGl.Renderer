@@ -33,6 +33,10 @@ const OP = {
   DrawInstanced: 14,
   SetContentTransform: 15,
   BindImageTexture: 16,
+  CreateColorPage: 17,
+  DestroyColorPage: 18,
+  UploadColorTexSubImage: 19,
+  BindColorTexture: 20,
 };
 
 /**
@@ -41,11 +45,12 @@ const OP = {
  * @type {ReadonlyArray<ReadonlyArray<readonly [number, number]>>}
  */
 const ATTRIBS = [
-  [[0, 2]],                  // Flat:    aPos
-  [[0, 2], [1, 2]],          // Ellipse: aPos, aLocalPos
-  [[0, 2], [1, 2], [2, 2]],  // Stroke:  aP0, aP1, aParams
-  [[0, 2], [1, 2]],          // Sdf:     aPos, aTexCoord
-  [[0, 2], [1, 2], [2, 2], [3, 1]],  // RoundRect: aPos, aLocal, aHalf, aRadius
+  [[0, 2]],                  // Flat:       aPos
+  [[0, 2], [1, 2]],          // Ellipse:    aPos, aLocalPos
+  [[0, 2], [1, 2], [2, 2]],  // Stroke:     aP0, aP1, aParams
+  [[0, 2], [1, 2]],          // Sdf:        aPos, aTexCoord
+  [[0, 2], [1, 2], [2, 2], [3, 1]],  // RoundRect:  aPos, aLocal, aHalf, aRadius
+  [[0, 2], [1, 2]],          // ColorGlyph: aPos, aTexCoord
 ];
 
 /**
@@ -75,6 +80,7 @@ const ATTRIBS = [
  *             gl: WebGL2RenderingContext,
  *             pipelines: Pipeline[],
  *             pages: (WebGLTexture | null)[],
+ *             colorPages: (WebGLTexture | null)[],
  *             textures: (WebGLTexture | null)[],
  *             buffers: (WebGLBuffer | null)[],
  *             vbo: WebGLBuffer,
@@ -130,6 +136,7 @@ export function initContext(canvasId) {
     canvas, gl,
     pipelines: [],
     pages: [],
+    colorPages: [],
     textures: [],
     buffers: [],
     vbo,
@@ -555,6 +562,10 @@ export function flush(surfaceId, commands, vertexBytes) {
         gl.bindTexture(gl.TEXTURE_2D, tex);
         break;
       }
+      case OP.BindColorTexture:
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, s.colorPages[cmds[b + 1]]);
+        break;
       case OP.SetScissor: {
         // Command carries top-left-origin screen coords; GL scissor is bottom-left-origin.
         const x = cmds[b + 1], y = cmds[b + 2], w = cmds[b + 3], h = cmds[b + 4];
@@ -661,6 +672,38 @@ export function syncAtlas(surfaceId, commands, transfer) {
           bytes.subarray(off, off + len));
         break;
       }
+      // The colour-glyph atlas's OWN page table (WebGlColorGlyphAtlas) -- same shapes as the three
+      // cases above, kept apart because its ids index s.colorPages, never s.pages.
+      case OP.CreateColorPage: {
+        const pageId = cmds[b + 1], dim = cmds[b + 2];
+        const tex = gl.createTexture();
+        if (!tex) throw new Error("webgl-renderer: createTexture failed");
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, dim, dim, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        s.colorPages[pageId] = tex;
+        break;
+      }
+      case OP.DestroyColorPage: {
+        const pageId = cmds[b + 1];
+        gl.deleteTexture(s.colorPages[pageId]);
+        s.colorPages.splice(pageId, 1);
+        break;
+      }
+      case OP.UploadColorTexSubImage: {
+        const pageId = cmds[b + 1], x = cmds[b + 2], y = cmds[b + 3];
+        const w = cmds[b + 4], h = cmds[b + 5];
+        const off = cmds[b + 6], len = cmds[b + 7];
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, s.colorPages[pageId]);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE,
+          bytes.subarray(off, off + len));
+        break;
+      }
       default:
         throw new Error(`webgl-renderer: unexpected atlas opcode ${cmds[b]} at record ${i}`);
     }
@@ -673,6 +716,7 @@ export function disposeContext(surfaceId) {
   if (!s) return;
   const gl = s.gl;
   for (const t of s.pages) if (t) gl.deleteTexture(t);
+  for (const t of s.colorPages) if (t) gl.deleteTexture(t);
   for (const t of s.textures) if (t) gl.deleteTexture(t);
   for (const b of s.buffers) if (b) gl.deleteBuffer(b);
   for (const p of s.pipelines) {
