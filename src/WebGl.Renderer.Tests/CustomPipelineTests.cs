@@ -46,8 +46,8 @@ public sealed class CustomPipelineTests
             Blend = PipelineBlend.AlphaOver,
         });
 
-        star.Id.ShouldBe(4); // fixed table is 0..3
-        line.Id.ShouldBe(5);
+        star.Id.ShouldBe(6); // fixed table is 0..5 (Flat, Ellipse, Stroke, Sdf, RoundRect, ColorGlyph)
+        line.Id.ShouldBe(7);
 
         var reg = bridge.RegisteredPipelines[0];
         reg.AttribTriples.ShouldBe([0, 2, 0, 1, 3, 1, 2, 1, 1, 3, 1, 1]);

@@ -16,7 +16,10 @@ CI restores DIR.Lib from NuGet. Verify pin changes with `-p:UseLocalDirLib=false
 
 - `WebGlRenderer : Renderer<WebGlContext>` (DIR.Lib contract). Draw methods append to
   `WebGlContext`'s command/vertex streams; `Present()` flushes via ONE `[JSImport]` call.
-  `WebGlRenderer.Text.cs` ports VkRenderer's DrawText layout loop (MSDF-only, no bitmap atlas).
+  `WebGlRenderer.Text.cs` ports VkRenderer's DrawText layout loop over TWO atlases: MTSDF for
+  every outline glyph, plus an RGBA bitmap atlas (`WebGlColorGlyphAtlas`) for a COLOUR glyph
+  (COLR/CBDT emoji) -- routed by the rasterizer's `IsColored` result, never a Unicode-range
+  heuristic (chess piece codepoints sit inside "emoji" ranges but are plain MTSDF outlines).
 - `Opcode.cs` + `wwwroot/webgl-renderer.js` are a WIRE PROTOCOL — fixed 8-int32 records, float
   payloads bit-cast into int slots, opcode numbers and the JS `ATTRIBS` table must stay in sync
   with `WebGlPipelines.FloatsPerVertex`.
@@ -26,6 +29,10 @@ CI restores DIR.Lib from NuGet. Verify pin changes with `-p:UseLocalDirLib=false
 - `WebGlSdfAtlasBackend : ISdfAtlasBackend` (DIR.Lib SdfFontAtlas core): encodes
   CreatePage/DestroyPage from lifecycle hooks; `SyncDirtyPages` pulls dirty rects and uploads
   FULL-WIDTH scanline ranges (deliberate v1 simplification).
+- `WebGlColorGlyphAtlas`: a second, independent RGBA page table for colour glyphs, WebGL-only (no
+  Vulkan/DIR.Lib counterpart to share -- SdfFontAtlas's core is MTSDF-specific). Its own opcodes
+  (`CreateColorPage`/`DestroyColorPage`/`UploadColorTexSubImage`/`BindColorTexture`) so its page ids
+  never contend with the SDF atlas's; same full-width-scanline v1 simplification.
 - `Interop/IWebGlBridge` is the testability seam: `JsWebGlBridge` = real `[JSImport]`
   (browser-only), tests inject `FakeWebGlBridge` via `WebGlRenderer.Create`.
 

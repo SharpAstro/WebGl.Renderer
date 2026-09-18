@@ -179,16 +179,60 @@ public static class WebGlPipelines
         }
         """;
 
+    // --- ColorGlyph: COLR/CBDT emoji, sampled verbatim from the colour-glyph atlas -----------------
+    // Transcribed from SdlVulkan.Renderer's tex.vert/tex.frag (VkPipelineSet.TexturedPipeline) —
+    // pos+uv passthrough vertex shader (byte-identical in shape to SdfVertexSource, since both are
+    // the same "pos+uv, project, pass UV through" body) and a fragment shader whose isColor mix is
+    // kept EXACTLY as Vulkan's, even though every texel this pipeline samples is already known
+    // (from the CPU-side IsColored routing) to be a colour glyph: the mix is what buys the "own RGB,
+    // alpha times uColor.a" rule for a genuinely-coloured texel, and dropping it would be a
+    // divergence from the Vulkan source the CLAUDE.md byte-identical rule forbids.
+
+    public const string ColorGlyphVertexSource = """
+        #version 300 es
+        layout(location = 0) in vec2 aPos;
+        layout(location = 1) in vec2 aTexCoord;
+        uniform mat4 uProj;
+        out vec2 vTexCoord;
+        void main() {
+            gl_Position = uProj * vec4(aPos, 0.0, 1.0);
+            vTexCoord = aTexCoord;
+        }
+        """;
+
+    public const string ColorGlyphFragmentSource = """
+        #version 300 es
+        precision highp float;
+        uniform vec4 uColor;
+        uniform sampler2D uTexture;
+        in vec2 vTexCoord;
+        out vec4 FragColor;
+        void main() {
+            vec4 texel = texture(uTexture, vTexCoord);
+            // Color glyphs (emoji, COLR) have their own RGB; monochrome glyphs are white (1,1,1) with varying alpha.
+            // Detect color glyphs by checking if RGB deviates from white.
+            float isColor = 1.0 - step(0.99, min(texel.r, min(texel.g, texel.b)));
+            vec3 rgb = mix(uColor.rgb, texel.rgb, isColor);
+            FragColor = vec4(rgb, uColor.a * texel.a);
+        }
+        """;
+
     /// <summary>Vertex-shader source per pipeline, ordered by <see cref="PipelineId"/> —
     /// the wire order CompilePipelines hands to the JS shim.</summary>
     public static readonly string[] VertexSources =
-        [FlatVertexSource, EllipseVertexSource, StrokeVertexSource, SdfVertexSource, RoundRectVertexSource];
+    [
+        FlatVertexSource, EllipseVertexSource, StrokeVertexSource, SdfVertexSource, RoundRectVertexSource,
+        ColorGlyphVertexSource,
+    ];
 
     /// <summary>Fragment-shader source per pipeline, ordered by <see cref="PipelineId"/>.</summary>
     public static readonly string[] FragmentSources =
-        [FlatFragmentSource, EllipseFragmentSource, StrokeFragmentSource, SdfFragmentSource, RoundRectFragmentSource];
+    [
+        FlatFragmentSource, EllipseFragmentSource, StrokeFragmentSource, SdfFragmentSource, RoundRectFragmentSource,
+        ColorGlyphFragmentSource,
+    ];
 
     /// <summary>Floats per vertex, per pipeline, ordered by <see cref="PipelineId"/> —
     /// mirrored by the JS pipeline table's attribute layouts.</summary>
-    public static readonly int[] FloatsPerVertex = [2, 4, 6, 4, 7];
+    public static readonly int[] FloatsPerVertex = [2, 4, 6, 4, 7, 4];
 }

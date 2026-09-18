@@ -14,6 +14,11 @@ public sealed class FakeWebGlBridge : IWebGlBridge
     public readonly List<string> Calls = new();
     public string[]? CompiledVertexSources;
     public string[]? CompiledFragmentSources;
+    // Number of built-in pipelines actually compiled, learned from CompilePipelines rather than a
+    // literal -- so RegisterPipeline's returned id tracks WebGlPipelines.VertexSources.Length
+    // exactly as the real JS shim's `pipelines.length` does, and adding a built-in cannot silently
+    // desync the fake from the real numbering the way a hardcoded offset once did.
+    private int _builtinPipelineCount;
     public readonly List<(int[] Commands, float[] Vertices)> Flushes = new();
     public readonly List<(int[] Commands, byte[] Transfer)> AtlasSyncs = new();
 
@@ -31,6 +36,7 @@ public sealed class FakeWebGlBridge : IWebGlBridge
         Calls.Add("compile");
         CompiledVertexSources = vertexSources;
         CompiledFragmentSources = fragmentSources;
+        _builtinPipelineCount = vertexSources.Length;
     }
 
     public void Flush(int surfaceId, ReadOnlySpan<int> commands, ReadOnlySpan<float> vertices)
@@ -55,7 +61,7 @@ public sealed class FakeWebGlBridge : IWebGlBridge
         Calls.Add("registerPipeline");
         RegisteredPipelines.Add((vertexSource, fragmentSource, attribTriples.ToArray(), topology, blend, uniformBlockName));
         // Ids continue past the fixed table, exactly like the JS shim's pipelines array.
-        return 4 + RegisteredPipelines.Count - 1;
+        return _builtinPipelineCount + RegisteredPipelines.Count - 1;
     }
 
     public int CreateBuffer(int surfaceId, ReadOnlySpan<byte> data)

@@ -30,9 +30,10 @@ public enum PipelineBlend
 public readonly record struct VertexAttrib(int Location, int Floats, bool PerInstance = false);
 
 /// <summary>Handle to a pipeline registered via <see cref="WebGlRenderer.RegisterPipeline"/>.
-/// Ids continue past the fixed <see cref="PipelineId"/> table (first custom id is 5). The id comes
-/// from the JS side (pipelines.length after the built-ins compile), so adding a built-in shifts this
-/// automatically -- there is no constant to keep in step, only this sentence.</summary>
+/// Ids continue past the fixed <see cref="PipelineId"/> table (first custom id is 6, one past
+/// <see cref="PipelineId.ColorGlyph"/>). The id comes from the JS side (pipelines.length after the
+/// built-ins compile), so adding a built-in shifts this automatically -- there is no constant to
+/// keep in step, only this sentence.</summary>
 public readonly record struct PipelineHandle(int Id);
 
 /// <summary>Texture coordinate wrapping on one axis of a consumer texture. Values are wire protocol.</summary>

@@ -6,6 +6,31 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.34
+
+**Colour glyphs (COLR/CBDT emoji).** `DrawText`/`MeasureText` now route a colour glyph -- Noto
+COLRv1's emoji included -- to a new RGBA bitmap atlas (`WebGlColorGlyphAtlas`) and a new
+`PipelineId.ColorGlyph` pipeline, instead of rendering it as a single-colour MTSDF silhouette.
+Routing is decided from the rasterizer's own `IsColored` result, never a Unicode-range heuristic:
+a monochrome outline glyph that happens to sit inside a Unicode "emoji" block (a chess piece in a
+symbol font, U+2654-265F) stays on the existing MTSDF `Sdf` pipeline exactly as before.
+
+The fragment shader is `SdlVulkan.Renderer`'s `tex.frag` transcribed byte-for-byte: a colour glyph
+keeps its own RGB, and its alpha is multiplied by the draw colour's alpha, so a label fading out
+fades its trailing emoji with it.
+
+Four new wire-protocol opcodes (`CreateColorPage` / `DestroyColorPage` / `UploadColorTexSubImage` /
+`BindColorTexture`, 17-20) give the colour-glyph atlas its own page table, kept apart from the SDF
+atlas's for the same reason consumer textures got their own table in 1.33: a page id must stay
+stable across the two atlases' independent page lifecycles. Packing is a simple fixed-size shelf
+packer (documented as a v1 simplification, matching `WebGlSdfAtlasBackend`'s own full-width-scanline
+upload shortcut); a glyph's colouredness and its packed pixels are each cached once per (font,
+glyph, size), so a repeated draw costs nothing beyond the first frame.
+
+Additive: nothing that existed changes, and a consumer that never draws a colour glyph emits the
+same byte stream as before (the new pipeline's `UseProgram`/`SetColor` records are only emitted
+when at least one colour glyph was actually drawn).
+
 ## 1.33
 
 **A custom pipeline can sample an image.** `LoadTextureAsync(url, wrapS, wrapT)` fetches an image and

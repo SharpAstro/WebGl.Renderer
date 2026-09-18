@@ -47,8 +47,9 @@ public sealed class ShaderSourceSanityTests
         WebGlPipelines.FloatsPerVertex.Length.ShouldBe(pipelineCount);
 
         // Wire protocol with the JS ATTRIBS table — PipelineId order: Flat, Ellipse, Stroke, Sdf,
-        // RoundRect. These stay literal because they ARE the contract, mirrored by hand in JS.
-        WebGlPipelines.FloatsPerVertex.ShouldBe([2, 4, 6, 4, 7]);
+        // RoundRect, ColorGlyph. These stay literal because they ARE the contract, mirrored by hand
+        // in JS.
+        WebGlPipelines.FloatsPerVertex.ShouldBe([2, 4, 6, 4, 7, 4]);
     }
 
     [Fact]

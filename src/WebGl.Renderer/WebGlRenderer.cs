@@ -11,7 +11,9 @@ namespace WebGl.Renderer;
 /// <see cref="Present"/> per frame hands both to the JS shim in a single interop call (plus a
 /// separate atlas-sync call when glyph pages changed). Text renders through the shared
 /// <see cref="SdfFontAtlas"/> core (DIR.Lib) with the same MTSDF shader math as the desktop
-/// Vulkan renderer — our own managed rasterizer, no browser text APIs.
+/// Vulkan renderer — our own managed rasterizer, no browser text APIs. A colour glyph (COLR/CBDT
+/// emoji) routes instead to <see cref="WebGlColorGlyphAtlas"/>, a second RGBA bitmap atlas the
+/// MTSDF field cannot represent — see the text-rendering partial's class doc for the routing rule.
 ///
 /// <para>Frame shape (mirrors the Chess.Web canvas pattern, render-on-demand, no RAF loop):
 /// <c>Clear(bg)</c> → GameUI/caller issues draws → <c>Present()</c>.</para>
@@ -21,6 +23,7 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
     private readonly IWebGlBridge _bridge;
     private readonly SdfFontAtlas _atlas;
     private readonly WebGlSdfAtlasBackend _atlasBackend;
+    private readonly WebGlColorGlyphAtlas _colorGlyphAtlas;
     private readonly ManagedFontRasterizer _rasterizer;
     private readonly bool _ownsRasterizer;
 
@@ -44,6 +47,7 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
             backend: _atlasBackend,
             diskCache: diskCache,
             synchronousRasterize: true);       // browser WASM: no real thread pool without COOP/COEP
+        _colorGlyphAtlas = new WebGlColorGlyphAtlas(ctx, rasterizer, ctx.MaxTextureSize);
     }
 
     /// <summary>
@@ -111,7 +115,11 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
     public void Present()
     {
         var atlasDirty = _atlasBackend.SyncDirtyPages(_atlas);
-        if (atlasDirty || Surface.AtlasCommands.Count > 0)
+        // The colour-glyph atlas is a second, independent page table (its own opcodes, its own
+        // dirty tracking) -- OR the two: either one having fresh pixels must trigger the SyncAtlas
+        // call, and a consumer that never draws a colour glyph must see no change at all.
+        var colorAtlasDirty = _colorGlyphAtlas.SyncDirtyPages();
+        if (atlasDirty || colorAtlasDirty || Surface.AtlasCommands.Count > 0)
         {
             _bridge.SyncAtlas(Surface.SurfaceId,
                 CollectionsMarshal.AsSpan(Surface.AtlasCommands),
