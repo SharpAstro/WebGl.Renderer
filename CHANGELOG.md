@@ -6,6 +6,13 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.35
+
+**Rebuilt against DIR.Lib 10.2**, which is additive: popover triggers and groups, presses declared on a
+tab item, and layout scroll containers. Nothing here changed to take it and all 60 tests pass as they
+were; the minor keeps the chain in step, so a consumer taking 1.35 gets the DIR.Lib this was built and
+tested against.
+
 ## 1.34
 
 **Colour glyphs (COLR/CBDT emoji).** `DrawText`/`MeasureText` now route a colour glyph -- Noto
