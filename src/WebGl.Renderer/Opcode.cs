@@ -23,7 +23,7 @@ public enum Opcode
     /// <summary>r, g, b, a (f32, 0..1). uniform4f(uColor) — the push-constant color analog.</summary>
     SetColor = 4,
 
-    /// <summary>value (f32). uniform1f(uExtra) — innerRadius | halfWidth | sdfEdge,
+    /// <summary>value (f32). uniform1f(uExtra) — ellipse strokeWidth (px) | halfWidth | sdfEdge,
     /// depending on the active pipeline.</summary>
     SetExtra = 5,
 
@@ -113,7 +113,7 @@ public enum PipelineId
 {
     /// <summary>Solid fill, pos(2f), standard over-blend.</summary>
     Flat = 0,
-    /// <summary>Analytic circle/ring, pos+localUV(4f); uExtra = innerRadius.</summary>
+    /// <summary>Anti-aliased disc/ring by pixel distance, pos+local(4f); uExtra = strokeWidth in px, 0 fills.</summary>
     Ellipse = 1,
     /// <summary>GPU line-segment expansion, P0+P1+params(6f); uExtra = halfWidth.</summary>
     Stroke = 2,

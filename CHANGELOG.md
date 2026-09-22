@@ -6,6 +6,31 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.36
+
+**Ellipses at any affine placement, anti-aliased, with a pixel-width stroke.** DIR.Lib 10.4
+declares the shape on `Renderer<TSurface>` and states the rule every backend implements: with
+`r = |local|`, the signed pixel distance to the boundary is `d = (r - 1) / |grad r|`, a fill covers
+`clamp(0.5 - d, 0, 1)`, a stroke of width `w` covers `clamp(0.5 + w/2 - |d|, 0, 1)`, and the
+footprint is the corners grown by `w/2 + 1` px along each axis. The Ellipse pipeline's fragment
+shader is that rule with the gradient read off `dFdx`/`dFdy` of the interpolated radius (core in
+GLSL ES 3.00), so a local distance becomes pixels for any rotation, scale or shear.
+
+- **The affine `FillEllipse` and `DrawEllipse` are overridden** as one padded quad each, in place
+  of the base's coverage default, which on this backend would have been one command-buffer draw
+  per span crossing into JS.
+- **The rect ring converts nothing any more.** `DrawEllipse(rect, ..)` used to derive a local hole
+  fraction from the SHORTER semi-axis while the Vulkan renderer derived its own from the LONGER, so
+  the same call drew two different rings on the two backends; both rect overloads now expand
+  through DIR.Lib's one `Renderer.EllipseCorners` and `uExtra` carries the stroke as the pixel
+  width it is.
+- **The edge is anti-aliased**, where the unit-disc discard it replaces read 0 or 255 and nothing
+  between.
+
+**Requires DIR.Lib 10.4**, the release that declares the shape and states the rule. The pin moves
+with it. The wire protocol is unchanged: same pipeline id, same `pos + local` vertex, same
+`SetExtra` slot, now a pixel width rather than a fraction.
+
 ## 1.35
 
 **Rebuilt against DIR.Lib 10.2**, which is additive: popover triggers and groups, presses declared on a
