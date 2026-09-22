@@ -33,8 +33,12 @@ public static class WebGlPipelines
         }
         """;
 
-    // --- Ellipse: analytic circle/ring fill+stroke via discard ----------------------------------
-    // The single combined-predicate discard is kept from the Vulkan source (it worked around a
+    // --- Ellipse: the pixel-distance rule DIR.Lib's Renderer.DrawEllipse states -----------------
+    // vLocal is the fragment's coordinate under the inverse of the affine map the quad carries, so
+    // r = |vLocal| is 1 on the boundary; dividing r - 1 by the screen-space derivative of r turns a
+    // local distance into PIXELS for any rotation, scale or shear, which is what makes uExtra a
+    // pixel stroke width at every point of every ellipse. Coverage is a half-plane ramp, so the
+    // edge is anti-aliased. The single discard is kept from the Vulkan source (it worked around a
     // Mesa llvmpipe double-discard-with-MSAA SEGV; irrelevant to WebGL but harmless and proven).
 
     public const string EllipseVertexSource = """
@@ -53,16 +57,18 @@ public static class WebGlPipelines
         #version 300 es
         precision highp float;
         uniform vec4 uColor;
-        uniform float uExtra; // innerRadius (0 = solid fill, >0 = ring)
+        uniform float uExtra; // strokeWidth in pixels (0 = solid fill, >0 = ring of that width)
         in vec2 vLocal;
         out vec4 FragColor;
         void main() {
-            float dist = dot(vLocal, vLocal);
-            float innerSq = uExtra * uExtra;
-            // Outside the unit disc OR inside the inner ring -> discard. Single
-            // statement avoids the llvmpipe double-discard-with-MSAA bug class.
-            if (dist > 1.0 || dist < innerSq) discard;
-            FragColor = uColor;
+            float r = length(vLocal);
+            float g = max(length(vec2(dFdx(r), dFdy(r))), 1e-6);
+            float d = (r - 1.0) / g;
+            float coverage = uExtra > 0.0
+                ? clamp(0.5 + uExtra * 0.5 - abs(d), 0.0, 1.0)
+                : clamp(0.5 - d, 0.0, 1.0);
+            if (coverage <= 0.0) discard;
+            FragColor = vec4(uColor.rgb, uColor.a * coverage);
         }
         """;
 

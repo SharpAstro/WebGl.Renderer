@@ -159,20 +159,56 @@ public sealed class CommandBufferEncodingTests
         cmds[^1].Slots[1].ShouldBe(30); // 5 dashes × 6 verts
     }
 
+    /// <summary>
+    /// The stroke reaches the shader as the pixel width it is. This used to encode a hole fraction
+    /// derived from the semi-minor axis (0.9 for 5 px on a 50 px radius) while the Vulkan renderer
+    /// derived its own from the semi-major, so the same call drew two different rings; the pixel
+    /// distance rule on DIR.Lib's abstraction leaves nothing to derive.
+    /// </summary>
     [Fact]
-    public void Ellipses_EncodeInnerRadius()
+    public void Ellipses_EncodeTheStrokeWidthInPixels()
     {
         var (renderer, bridge) = CreateRenderer();
         renderer.Clear(new RGBAColor32(0, 0, 0, 255));
-        var rect = Rect(0, 0, 100, 100); // 100×100 → semi-minor 50
+        var rect = Rect(0, 0, 100, 100);
         renderer.FillEllipse(rect, new RGBAColor32(255, 255, 255, 255));
         renderer.DrawEllipse(rect, new RGBAColor32(255, 255, 255, 255), strokeWidth: 5f);
 
         var cmds = PresentAndDecode(renderer, bridge);
         var extras = cmds.Where(c => c.Op == Opcode.SetExtra).ToList();
         extras.Count.ShouldBe(2);
-        extras[0].SlotF(0).ShouldBe(0f);           // fill: solid disc
-        extras[1].SlotF(0).ShouldBe(0.9f, 1e-4);   // ring: 1 - 5/50
+        extras[0].SlotF(0).ShouldBe(0f);   // fill
+        extras[1].SlotF(0).ShouldBe(5f);   // stroke, in pixels
+    }
+
+    /// <summary>
+    /// A rotated ellipse is ONE quad on the Ellipse pipeline, its corners padded by the stroke's outer
+    /// half plus one pixel of anti-aliased edge along each axis, in that axis's own local units. The
+    /// quad here has a 20 px semi-axis and a 10 px one, stroked 4 px, so the padding is 3 px: 0.15
+    /// local along the long axis and 0.3 along the short one.
+    /// </summary>
+    [Fact]
+    public void AnAffineEllipse_EncodesOnePaddedQuad()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        renderer.Clear(new RGBAColor32(0, 0, 0, 255));
+        // Centre (50,50), semi-axis U = (20,0), semi-axis V = (0,10), given as corners.
+        renderer.DrawEllipse((30f, 40f), (70f, 40f), (70f, 60f), (30f, 60f),
+            new RGBAColor32(255, 255, 255, 255), strokeWidth: 4f);
+
+        var cmds = PresentAndDecode(renderer, bridge);
+        var verts = bridge.Flushes[^1].Vertices;
+
+        cmds.Select(c => c.Op).ShouldBe([Opcode.Clear, Opcode.UseProgram, Opcode.SetColor, Opcode.SetExtra, Opcode.Draw]);
+        cmds[1].Slots[0].ShouldBe((int)PipelineId.Ellipse);
+        cmds[3].SlotF(0).ShouldBe(4f);
+        cmds[4].Slots[1].ShouldBe(6);
+
+        verts.Length.ShouldBe(24);
+        verts[2].ShouldBe(-1.15f, 1e-5f, "local x of the first corner, padded 3 px on a 20 px axis");
+        verts[3].ShouldBe(-1.3f, 1e-5f, "local y of the first corner, padded 3 px on a 10 px axis");
+        verts[0].ShouldBe(50f - 23f, 1e-4f, "its position is the centre less the padded axes");
+        verts[1].ShouldBe(50f - 13f, 1e-4f);
     }
 
     [Fact]

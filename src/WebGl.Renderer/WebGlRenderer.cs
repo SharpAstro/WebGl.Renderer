@@ -351,28 +351,79 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
         v[at + 4] = side; v[at + 5] = end;
     }
 
-    // ---- ellipses (Ellipse pipeline: analytic disc/ring in the fragment shader) ----------------------
+    // ---- ellipses (Ellipse pipeline: the pixel-distance rule in the fragment shader) -----------------
 
-    private void EmitEllipseQuad(in RectInt rect, RGBAColor32 color, float innerRadius)
+    /// <summary>
+    /// The one draw behind every ellipse entry point: six vertices of <c>pos + local</c> on the
+    /// Ellipse pipeline, with <paramref name="strokeWidth"/> in PIXELS on <c>uExtra</c>, 0 being the
+    /// fill. The rule the shader evaluates is the one on the base's corner
+    /// <c>DrawEllipse(c00, c10, c11, c01, colour, strokeWidth)</c>, and so is the footprint: the
+    /// corners grown by <c>w/2 + 1</c> px along each axis, which is where the anti-aliased rim lands.
+    /// The same padding SdlVulkan.Renderer's <c>EllipseQuad</c> applies.
+    /// </summary>
+    private void EmitEllipseQuad((float X, float Y) c00, (float X, float Y) c10,
+                                 (float X, float Y) c11, (float X, float Y) c01,
+                                 RGBAColor32 color, float strokeWidth)
     {
+        // The corners imply the axes, as in the base default: c10 - c00 spans 2u, c01 - c00 spans 2v.
+        // c11 is implied by the other three and is not read.
+        var ux = (c10.X - c00.X) * 0.5f;
+        var uy = (c10.Y - c00.Y) * 0.5f;
+        var vx = (c01.X - c00.X) * 0.5f;
+        var vy = (c01.Y - c00.Y) * 0.5f;
+        var cx = c00.X + ux + vx;
+        var cy = c00.Y + uy + vy;
+
+        var pad = (strokeWidth * 0.5f) + 1f;
+        var eu = 1f + (pad / MathF.Max(MathF.Sqrt((ux * ux) + (uy * uy)), 1e-6f));
+        var ev = 1f + (pad / MathF.Max(MathF.Sqrt((vx * vx) + (vy * vy)), 1e-6f));
+
         EnsurePipeline(PipelineId.Ellipse);
         EnsureColor(color);
-        Surface.Emit(Opcode.SetExtra, [WebGlContext.F(innerRadius)]);
-        float x0 = rect.UpperLeft.X, y0 = rect.UpperLeft.Y;
-        float x1 = rect.LowerRight.X, y1 = rect.LowerRight.Y;
-        // 6 verts × (pos, localUV in [-1,1]); the FS discards outside the unit disc / inside the ring.
+        Surface.Emit(Opcode.SetExtra, [WebGlContext.F(strokeWidth)]);
+
+        // 6 verts x (pos, local); local runs a little past +-1 by the padding, and the FS reads only
+        // its length.
         Span<float> v = stackalloc float[24];
-        v[0] = x0; v[1] = y0; v[2] = -1f; v[3] = -1f;
-        v[4] = x1; v[5] = y0; v[6] = +1f; v[7] = -1f;
-        v[8] = x1; v[9] = y1; v[10] = +1f; v[11] = +1f;
-        v[12] = x0; v[13] = y0; v[14] = -1f; v[15] = -1f;
-        v[16] = x1; v[17] = y1; v[18] = +1f; v[19] = +1f;
-        v[20] = x0; v[21] = y1; v[22] = -1f; v[23] = +1f;
+        WriteEllipseVertex(v, 0, cx - (eu * ux) - (ev * vx), cy - (eu * uy) - (ev * vy), -eu, -ev);
+        WriteEllipseVertex(v, 4, cx + (eu * ux) - (ev * vx), cy + (eu * uy) - (ev * vy), +eu, -ev);
+        WriteEllipseVertex(v, 8, cx + (eu * ux) + (ev * vx), cy + (eu * uy) + (ev * vy), +eu, +ev);
+        WriteEllipseVertex(v, 12, cx - (eu * ux) - (ev * vx), cy - (eu * uy) - (ev * vy), -eu, -ev);
+        WriteEllipseVertex(v, 16, cx + (eu * ux) + (ev * vx), cy + (eu * uy) + (ev * vy), +eu, +ev);
+        WriteEllipseVertex(v, 20, cx - (eu * ux) + (ev * vx), cy - (eu * uy) + (ev * vy), -eu, +ev);
         EmitDraw(v, 4);
     }
 
+    private static void WriteEllipseVertex(Span<float> v, int at, float x, float y, float localX, float localY)
+    {
+        v[at] = x; v[at + 1] = y;
+        v[at + 2] = localX; v[at + 3] = localY;
+    }
+
     public override void FillEllipse(in RectInt rect, RGBAColor32 fillColor)
-        => EmitEllipseQuad(in rect, fillColor, innerRadius: 0f);
+    {
+        // DIR.Lib's one rect-to-corners expansion, so this backend and Vulkan cannot each pick their own.
+        var (c00, c10, c11, c01) = EllipseCorners(rect);
+        FillEllipse(c00, c10, c11, c01, fillColor);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>One quad on the Ellipse pipeline in place of the base coverage default; the rule
+    /// both implement is stated once on the base declaration.</remarks>
+    public override void FillEllipse((float X, float Y) c00, (float X, float Y) c10,
+                                     (float X, float Y) c11, (float X, float Y) c01, RGBAColor32 fillColor)
+        => EmitEllipseQuad(c00, c10, c11, c01, fillColor, strokeWidth: 0f);
+
+    /// <inheritdoc/>
+    /// <remarks>One quad on the Ellipse pipeline in place of the base coverage default; the rule
+    /// both implement is stated once on the base declaration.</remarks>
+    public override void DrawEllipse((float X, float Y) c00, (float X, float Y) c10,
+                                     (float X, float Y) c11, (float X, float Y) c01,
+                                     RGBAColor32 strokeColor, float strokeWidth)
+    {
+        if (strokeWidth <= 0f) return;
+        EmitEllipseQuad(c00, c10, c11, c01, strokeColor, strokeWidth);
+    }
 
     /// <summary>
     /// Rounded-rect fill as a SINGLE distance-field quad, replacing the base class's
@@ -431,12 +482,12 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
 
     public override void DrawEllipse(in RectInt rect, RGBAColor32 strokeColor, float strokeWidth = 1f)
     {
-        // Ring via normalized inner radius: outer radius (local units) is 1; the stroke eats
-        // strokeWidth pixels of the semi-minor axis. Exact for circles, the same unit-circle
-        // approximation for non-circular ellipses the Vulkan renderer uses.
-        var semiMinor = Math.Min(rect.Width, rect.Height) * 0.5f;
-        var innerRadius = semiMinor <= 0f ? 0f : Math.Max(0f, 1f - strokeWidth / semiMinor);
-        EmitEllipseQuad(in rect, strokeColor, innerRadius);
+        // Nothing is converted here. This used to derive a local hole fraction from the SHORTER
+        // semi-axis while the Vulkan renderer derived its own from the LONGER, so the same call drew
+        // two different rings; the stroke now reaches the shader as the pixel width it is, through
+        // DIR.Lib's one rect-to-corners expansion.
+        var (c00, c10, c11, c01) = EllipseCorners(rect);
+        DrawEllipse(c00, c10, c11, c01, strokeColor, strokeWidth);
     }
 
     // ---- clip ------------------------------------------------------------------------------------
