@@ -32,6 +32,9 @@ public sealed partial class WebGlRenderer : Renderer<WebGlContext>
     private int? _activePipeline;
     private RGBAColor32? _activeColor;
 
+    // WhenPipelineReadyAsync's one task per pipeline id. The renderer lives on the browser's single thread.
+    private readonly Dictionary<int, Task> _pipelineReady = [];
+
     private WebGlRenderer(WebGlContext ctx, IWebGlBridge bridge,
         ManagedFontRasterizer rasterizer, bool ownsRasterizer, SdfGlyphDiskCache? diskCache)
         : base(ctx)

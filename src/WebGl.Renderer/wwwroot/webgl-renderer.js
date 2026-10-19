@@ -61,6 +61,9 @@ const ATTRIBS = [
 
 /**
  * @typedef {{ program: WebGLProgram,
+ *             shaders: WebGLShader[] | null,
+ *             uboName: string | null,
+ *             ready: Promise<void> | null,
  *             uProj: WebGLUniformLocation | null,
  *             uColor: WebGLUniformLocation | null,
  *             uExtra: WebGLUniformLocation | null,
@@ -88,7 +91,8 @@ const ATTRIBS = [
  *             viewportW: number,
  *             viewportH: number,
  *             ct: Float32Array,
- *             enabledLocs: Set<number> }} Surface
+ *             enabledLocs: Set<number>,
+ *             parallel: KHR_parallel_shader_compile | null }} Surface
  */
 
 /** @type {(Surface | null)[]} */
@@ -146,6 +150,9 @@ export function initContext(canvasId) {
     // content→device affine [m11, m12, m21, m22, m31, m32]; identity until .NET says otherwise.
     ct: new Float32Array([1, 0, 0, 1, 0, 0]),
     enabledLocs: new Set(),
+    // A program links on the driver's own threads where the browser offers it, so registering one never waits for its
+    // compiler: finish() asks whether it is done, and only a first use before then waits, as every use did before.
+    parallel: gl.getExtension("KHR_parallel_shader_compile"),
   };
   gl.enable(gl.BLEND);
   // Standard "over" with alpha-preserving alpha channel — mirrors VkPipelineSet's default:
@@ -183,13 +190,16 @@ export function compilePipelines(surfaceId, vertexSources, fragmentSources, floa
   const gl = s.gl;
   const fpv = asInt32(floatsPerVertex);
   for (let i = 0; i < vertexSources.length; i++) {
-    const program = link(gl, vertexSources[i], fragmentSources[i]);
+    const { program, shaders } = link(gl, vertexSources[i], fragmentSources[i]);
     s.pipelines.push({
       program,
-      uProj: gl.getUniformLocation(program, "uProj"),
-      uColor: gl.getUniformLocation(program, "uColor"),
-      uExtra: gl.getUniformLocation(program, "uExtra"),
-      uTexture: gl.getUniformLocation(program, "uTexture"),
+      shaders,
+      uboName: null,
+      ready: null,
+      uProj: null,
+      uColor: null,
+      uExtra: null,
+      uTexture: null,
       floatsPerVertex: fpv[i],
       attribs: ATTRIBS[i],
       mode: gl.TRIANGLES,
@@ -234,18 +244,17 @@ export function registerPipeline(surfaceId, vertexSource, fragmentSource, attrib
     else { iAttribs.push(entry); iFloats += triples[t + 1]; }
   }
 
-  const program = link(gl, vertexSource, fragmentSource);
+  const { program, shaders } = link(gl, vertexSource, fragmentSource);
   const id = s.pipelines.length;
-  const blockIndex = gl.getUniformBlockIndex(program, uniformBlockName);
-  if (blockIndex !== gl.INVALID_INDEX) {
-    gl.uniformBlockBinding(program, blockIndex, id);
-  }
   s.pipelines.push({
     program,
-    uProj: gl.getUniformLocation(program, "uProj"),
-    uColor: gl.getUniformLocation(program, "uColor"),
-    uExtra: gl.getUniformLocation(program, "uExtra"),
-    uTexture: gl.getUniformLocation(program, "uTexture"),
+    shaders,
+    uboName: uniformBlockName,
+    ready: null,
+    uProj: null,
+    uColor: null,
+    uExtra: null,
+    uTexture: null,
     floatsPerVertex: vFloats,
     attribs: vAttribs,
     mode: topology === 1 ? gl.LINES : topology === 2 ? gl.LINE_STRIP : gl.TRIANGLES,
@@ -367,10 +376,13 @@ export function setUniformBlock(surfaceId, pipelineId, data) {
 }
 
 /**
+ * Starts a program's compile and link and returns at once: no status is asked here, since asking is what waits for the
+ * compiler (a 129 ms link was the whole of the frame that first drew a planet in TianWen's orrery). finish() asks, once the
+ * program is used, and whenPipelineReady() polls without waiting.
  * @param {WebGL2RenderingContext} gl
  * @param {string} vsSource
  * @param {string} fsSource
- * @returns {WebGLProgram}
+ * @returns {{ program: WebGLProgram, shaders: WebGLShader[] }}
  */
 function link(gl, vsSource, fsSource) {
   /** @param {number} type @param {string} src @returns {WebGLShader} */
@@ -379,20 +391,87 @@ function link(gl, vsSource, fsSource) {
     if (!sh) throw new Error("webgl-renderer: createShader failed");
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-      throw new Error(`webgl-renderer: shader compile failed: ${gl.getShaderInfoLog(sh)}\n${src}`);
-    }
     return sh;
   };
   const program = gl.createProgram();
   if (!program) throw new Error("webgl-renderer: createProgram failed");
-  gl.attachShader(program, compile(gl.VERTEX_SHADER, vsSource));
-  gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fsSource));
+  const shaders = [compile(gl.VERTEX_SHADER, vsSource), compile(gl.FRAGMENT_SHADER, fsSource)];
+  for (const sh of shaders) gl.attachShader(program, sh);
   gl.linkProgram(program);
+  return { program, shaders };
+}
+
+/**
+ * Whether the driver has finished linking the pipeline's program, asked without waiting: always true where the browser
+ * lacks KHR_parallel_shader_compile, since there the first use waits as it always did.
+ * @param {Surface} s @param {Pipeline} p @returns {boolean}
+ */
+function linked(s, p) {
+  return !p.shaders || !s.parallel
+    || /** @type {boolean} */ (s.gl.getProgramParameter(p.program, s.parallel.COMPLETION_STATUS_KHR));
+}
+
+/**
+ * Makes a pipeline usable, once, on its first use: checks its link (waiting for the compiler if it is still at work), reports
+ * a failed compile or link with its log as registration once did, and reads its uniforms.
+ * @param {Surface} s @param {Pipeline} p
+ */
+function finish(s, p) {
+  if (!p.shaders) return;
+  const gl = s.gl;
+  const program = p.program;
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    for (const sh of p.shaders) {
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        throw new Error(`webgl-renderer: shader compile failed: ${gl.getShaderInfoLog(sh)}\n${gl.getShaderSource(sh)}`);
+      }
+    }
     throw new Error(`webgl-renderer: program link failed: ${gl.getProgramInfoLog(program)}`);
   }
-  return program;
+  for (const sh of p.shaders) {
+    gl.detachShader(program, sh);
+    gl.deleteShader(sh);
+  }
+  p.shaders = null;
+  p.uProj = gl.getUniformLocation(program, "uProj");
+  p.uColor = gl.getUniformLocation(program, "uColor");
+  p.uExtra = gl.getUniformLocation(program, "uExtra");
+  p.uTexture = gl.getUniformLocation(program, "uTexture");
+  if (p.uboName) {
+    const blockIndex = gl.getUniformBlockIndex(program, p.uboName);
+    if (blockIndex !== gl.INVALID_INDEX) {
+      gl.uniformBlockBinding(program, blockIndex, p.uboBinding);
+    }
+  }
+}
+
+/**
+ * Resolves once the pipeline's program has linked, asking the driver once an animation frame and never waiting on it; a
+ * failed compile or link rejects with its log. A consumer draws a stand-in until then and redraws when it resolves.
+ * @param {number} surfaceId @param {number} pipelineId @returns {Promise<void>}
+ */
+export function whenPipelineReady(surfaceId, pipelineId) {
+  const s = surface(surfaceId);
+  const p = s.pipelines[pipelineId];
+  if (!p) throw new Error(`webgl-renderer: unknown pipeline ${pipelineId}`);
+  p.ready ??= new Promise((resolve, reject) => {
+    const poll = () => {
+      if (surfaces[surfaceId] !== s) {
+        reject(new Error("webgl-renderer: the surface was disposed before the pipeline linked"));
+      } else if (linked(s, p)) {
+        try {
+          finish(s, p);
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      } else {
+        requestAnimationFrame(poll);
+      }
+    };
+    poll();
+  });
+  return p.ready;
 }
 
 /** @param {Surface} s @param {number} w @param {number} h */
@@ -441,6 +520,7 @@ function rebuildProjection(s) {
 /** @param {Surface} s @param {Pipeline} p */
 function applyPipelineUniforms(s, p) {
   const gl = s.gl;
+  finish(s, p);
   gl.useProgram(p.program);
   if (p.uProj) gl.uniformMatrix4fv(p.uProj, false, s.proj);
   if (p.uTexture) gl.uniform1i(p.uTexture, 0);
@@ -720,6 +800,7 @@ export function disposeContext(surfaceId) {
   for (const t of s.textures) if (t) gl.deleteTexture(t);
   for (const b of s.buffers) if (b) gl.deleteBuffer(b);
   for (const p of s.pipelines) {
+    for (const sh of p.shaders ?? []) gl.deleteShader(sh);
     gl.deleteProgram(p.program);
     if (p.ubo) gl.deleteBuffer(p.ubo);
   }

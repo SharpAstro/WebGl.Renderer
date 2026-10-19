@@ -58,6 +58,26 @@ public sealed class CustomPipelineTests
     }
 
     [Fact]
+    public void WhenPipelineReady_IsTheDriversLinkAskedOncePerPipeline()
+    {
+        var (renderer, bridge) = CreateRenderer();
+        var star = renderer.RegisterPipeline(StarLike);
+        var line = renderer.RegisterPipeline(StarLike with { Topology = PipelineTopology.Lines });
+
+        // Registering asks nothing: a pipeline is waited on only by a consumer that wants to know.
+        bridge.Calls.ShouldNotContain(c => c.StartsWith("whenPipelineReady", StringComparison.Ordinal));
+
+        var ready = renderer.WhenPipelineReadyAsync(star);
+        ready.IsCompleted.ShouldBeFalse();
+        renderer.WhenPipelineReadyAsync(star).ShouldBeSameAs(ready);
+        bridge.Calls.Count(c => c == $"whenPipelineReady:{star.Id}").ShouldBe(1);
+
+        bridge.PipelineLinks[star.Id].SetResult();
+        ready.IsCompletedSuccessfully.ShouldBeTrue();
+        renderer.WhenPipelineReadyAsync(line).IsCompleted.ShouldBeFalse();
+    }
+
+    [Fact]
     public void BufferLifecycle_CreateUpdateDestroy_RoundTripsBytes()
     {
         var (renderer, bridge) = CreateRenderer();

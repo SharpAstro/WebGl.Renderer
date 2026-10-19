@@ -12,9 +12,12 @@ namespace WebGl.Renderer;
 public sealed partial class WebGlRenderer
 {
     /// <summary>
-    /// Compiles and registers a custom pipeline; the returned handle selects it via
-    /// <see cref="UsePipeline"/>. Registration is immediate (one bridge call) — do it at load
-    /// time, not per frame.
+    /// Registers a custom pipeline and starts compiling it; the returned handle selects it via
+    /// <see cref="UsePipeline"/>. Registration is one bridge call and does not wait for the shader
+    /// compiler (where the browser has <c>KHR_parallel_shader_compile</c>, the driver links on its own
+    /// threads): the first frame that DRAWS with the pipeline waits for whatever is left of the link,
+    /// as every registration once did. Register at load time, not per frame, and a consumer that must
+    /// not stall draws a stand-in until <see cref="WhenPipelineReadyAsync"/> completes.
     /// </summary>
     public PipelineHandle RegisterPipeline(CustomPipelineDescriptor descriptor)
     {
@@ -30,6 +33,23 @@ public sealed partial class WebGlRenderer
             descriptor.VertexSource, descriptor.FragmentSource,
             triples, (int)descriptor.Topology, (int)descriptor.Blend, descriptor.UniformBlockName);
         return new PipelineHandle(id);
+    }
+
+    /// <summary>
+    /// Completes once <paramref name="pipeline"/>'s program has linked, without the main thread ever
+    /// waiting for it: the driver is asked once an animation frame. Until then a draw with the pipeline
+    /// would wait for the compiler (a 129 ms link was the whole of the frame that first drew TianWen's
+    /// orrery bodies), so draw a stand-in while <see cref="Task.IsCompleted"/> is false and redraw when it
+    /// completes. Faults with the compile or link log when the program failed. Completes at once where
+    /// the browser lacks <c>KHR_parallel_shader_compile</c>. One task per pipeline, however often asked.
+    /// </summary>
+    public Task WhenPipelineReadyAsync(PipelineHandle pipeline)
+    {
+        if (!_pipelineReady.TryGetValue(pipeline.Id, out var ready))
+        {
+            _pipelineReady[pipeline.Id] = ready = _bridge.WhenPipelineReadyAsync(Surface.SurfaceId, pipeline.Id);
+        }
+        return ready;
     }
 
     /// <summary>Creates a persistent GPU buffer from float data (STATIC_DRAW). Geometry uploads

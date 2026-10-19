@@ -64,6 +64,19 @@ public sealed class FakeWebGlBridge : IWebGlBridge
         return _builtinPipelineCount + RegisteredPipelines.Count - 1;
     }
 
+    /// <summary>Each pipeline's link, completed by the test (<c>SetResult</c> / <c>SetException</c>) when it chooses.</summary>
+    public readonly Dictionary<int, TaskCompletionSource> PipelineLinks = new();
+
+    public Task WhenPipelineReadyAsync(int surfaceId, int pipelineId)
+    {
+        Calls.Add($"whenPipelineReady:{pipelineId}");
+        if (!PipelineLinks.TryGetValue(pipelineId, out var link))
+        {
+            PipelineLinks[pipelineId] = link = new TaskCompletionSource();
+        }
+        return link.Task;
+    }
+
     public int CreateBuffer(int surfaceId, ReadOnlySpan<byte> data)
     {
         Calls.Add("createBuffer");

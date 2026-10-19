@@ -33,6 +33,9 @@ internal sealed partial class JsWebGlBridge : IWebGlBridge
         => Js.RegisterPipeline(surfaceId, vertexSource, fragmentSource,
             attribTriples, topology, blend, uniformBlockName);
 
+    public Task WhenPipelineReadyAsync(int surfaceId, int pipelineId)
+        => Js.WhenPipelineReady(surfaceId, pipelineId);
+
     public int CreateBuffer(int surfaceId, ReadOnlySpan<byte> data)
         => Js.CreateBuffer(surfaceId, data);
 
@@ -84,6 +87,10 @@ internal sealed partial class JsWebGlBridge : IWebGlBridge
             string vertexSource, string fragmentSource,
             [JSMarshalAs<JSType.MemoryView>] Span<int> attribTriples,
             int topology, int blend, string uniformBlockName);
+
+        [JSImport("whenPipelineReady", ModuleName)]
+        [return: JSMarshalAs<JSType.Promise<JSType.Void>>]
+        public static partial Task WhenPipelineReady(int surfaceId, int pipelineId);
 
         [JSImport("createBuffer", ModuleName)]
         public static partial int CreateBuffer(int surfaceId,

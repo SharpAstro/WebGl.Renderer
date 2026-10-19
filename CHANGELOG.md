@@ -6,6 +6,24 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.37
+
+**Registering a pipeline no longer waits for the shader compiler.** `link()` compiled, linked and then
+asked `COMPILE_STATUS` and `LINK_STATUS` straight away, and asking is what makes the main thread wait for
+the driver: in TianWen's web orrery one `getProgramParameter` held the first frame that drew a planet for
+129 ms (Adreno X1-85 through ANGLE D3D11, measured by `FrameHitchProbe` against the deployed showcase).
+Where the browser offers `KHR_parallel_shader_compile` the driver now links on its own threads.
+
+- **`WebGlRenderer.WhenPipelineReadyAsync(PipelineHandle)`** completes once the program has linked,
+  asking `COMPLETION_STATUS_KHR` once an animation frame and never waiting; it faults with the compile or
+  link log. A consumer that must not stall draws a stand-in until it completes and redraws then. One task
+  per pipeline. It completes at once where the browser lacks the extension.
+- **A pipeline used before it has linked waits, as every use did before**, so a consumer that never asks
+  draws exactly what it drew. The uniforms are read on that first use, not at registration.
+- **A failed compile or link now throws on the pipeline's first use** (or faults its ready task), with
+  the same message and log as before, rather than from `RegisterPipeline`. The fixed table compiles the
+  same way, so its four programs link in parallel at startup.
+
 ## 1.36
 
 **Ellipses at any affine placement, anti-aliased, with a pixel-width stroke.** DIR.Lib 10.4

@@ -36,6 +36,11 @@ internal interface IWebGlBridge
     int RegisterPipeline(int surfaceId, string vertexSource, string fragmentSource,
         ReadOnlySpan<int> attribTriples, int topology, int blend, string uniformBlockName);
 
+    /// <summary>Completes once the pipeline's program has linked, asked of the driver without waiting
+    /// (<c>KHR_parallel_shader_compile</c>; at once where the browser lacks it); faults with the compile or
+    /// link log when it failed.</summary>
+    Task WhenPipelineReadyAsync(int surfaceId, int pipelineId);
+
     /// <summary>Create a persistent GPU buffer (STATIC_DRAW) with the given contents; returns its id.</summary>
     int CreateBuffer(int surfaceId, ReadOnlySpan<byte> data);
 
