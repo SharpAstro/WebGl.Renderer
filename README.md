@@ -37,6 +37,12 @@ renderer.Present();
 The JS shim ships as a static web asset (`_content/WebGl.Renderer/webgl-renderer.js`) — no
 consumer wiring beyond the NuGet reference.
 
+The browser `KeyboardEvent.Key` to `InputKey` map ships with the package as `WebInputMapping`, the
+analogue of SdlVulkan.Renderer's `SdlInputMapping` (it also maps the modifiers to `InputModifier`).
+`WebGlCanvas` applies it for you: `OnInputKey` delivers a `CanvasKeyEventArgs` (`InputKey`,
+`InputModifier` and the raw event) for every keydown that maps to something, beside the raw
+`OnKeyDown`.
+
 ## Tests
 
 `src/WebGl.Renderer.Tests` runs headless on desktop .NET: command-stream encoding goldens,

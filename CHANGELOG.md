@@ -6,6 +6,29 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.38
+
+**The browser key map ships with the renderer, level with the SDL one.** Every browser app on
+WebGl.Renderer kept its own copy of the `KeyboardEvent.Key` to DIR.Lib `InputKey` table; SDL apps get
+theirs from `SdlInputMapping`. Now the browser has the same.
+
+- **`WebInputMapping`** maps a Blazor `KeyboardEventArgs` (Key, Code, Shift/Ctrl/Alt) to `InputKey` and
+  `InputModifier`, producing the same `InputKey` values as `SdlInputMapping` (`ToInputKey`,
+  `ToInputModifier`, `ToInput`).
+- **`=` and the `Code` fallback**: `=` maps to `Plus` like `+`, and where `Key` does not name the key
+  (a shifted or layout-changed character such as `!` on Digit1) the physical `Code` decides, so the key
+  lands where SDL lands.
+- **Keypad choice**: NumpadAdd, NumpadSubtract, NumpadDecimal, NumpadDivide and NumpadEnter map by
+  `Code` (Plus, Minus, Period, Slash, Enter). Keypad digits are deliberately not mapped by `Code`
+  (NumLock-off Numpad5 is `Clear` and must not become D5), and NumpadMultiply has no `InputKey`, so it
+  is `None`.
+- **`WebGlCanvas.OnInputKey`** delivers a `CanvasKeyEventArgs` (`InputKey`, `InputModifier`, raw
+  `KeyboardEventArgs`) for each keydown that maps to something other than `InputKey.None`. `OnKeyDown`
+  still fires raw for every key, first.
+
+Follow-ups, not part of this release: tianwen's Planner drops its own `MapKey` in favour of
+`OnInputKey`; the DIR.Lib README line about who owns the browser key map is updated.
+
 ## 1.37
 
 **Registering a pipeline no longer waits for the shader compiler.** `link()` compiled, linked and then
