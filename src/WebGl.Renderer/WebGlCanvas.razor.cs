@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using DIR.Lib;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -85,6 +86,13 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
     /// <summary>Forwarded verbatim — no coordinate mapping applies to key events.</summary>
     [Parameter]
     public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
+
+    /// <summary>A keydown translated by <see cref="WebInputMapping"/> into DIR.Lib's
+    /// <c>InputKey</c> + <c>InputModifier</c>, fired after <see cref="OnKeyDown"/> and only for keys
+    /// that map to something other than <c>InputKey.None</c>. The raw event rides along in
+    /// <see cref="CanvasKeyEventArgs.Original"/>.</summary>
+    [Parameter]
+    public EventCallback<CanvasKeyEventArgs> OnInputKey { get; set; }
 
     /// <summary>A two-finger pinch (touchscreen). Fires per <c>touchmove</c> while two fingers are
     /// down; see <see cref="CanvasPinchEventArgs"/> for the relative-scale + backing-space-midpoint
@@ -240,7 +248,19 @@ public sealed partial class WebGlCanvas : ComponentBase, IHandleEvent, IAsyncDis
         return OnWheel.InvokeAsync(new CanvasWheelEventArgs(p.X, p.Y, e.DeltaY, e.DeltaMode, e));
     }
 
-    private Task HandleKeyDownAsync(KeyboardEventArgs e) => OnKeyDown.InvokeAsync(e);
+    private async Task HandleKeyDownAsync(KeyboardEventArgs e)
+    {
+        await OnKeyDown.InvokeAsync(e);
+        if (!OnInputKey.HasDelegate)
+        {
+            return;
+        }
+        var (key, modifiers) = WebInputMapping.ToInput(e);
+        if (key != InputKey.None)
+        {
+            await OnInputKey.InvokeAsync(new CanvasKeyEventArgs(key, modifiers, e));
+        }
+    }
 
     // ── Touch → pointer/pinch bridge (JSInvokable, called from webgl-canvas.js) ──
     // touch-action:none (set on the canvas so the page doesn't scroll/zoom under the fingers) ALSO
