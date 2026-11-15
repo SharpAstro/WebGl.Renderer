@@ -6,6 +6,13 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.39
+
+**Built against DIR.Lib 11.62 (was 10.4).** Chess pins DIR.Lib 11.x, so NuGet has been loading this package, compiled
+against 10.4, on an 11.x DIR.Lib, across a MAJOR version whose 11.0 removed and changed API: any member that went
+would only surface at run time, in the browser, as a `MissingMethodException`. Rebuilt against the current DIR.Lib
+with no source change: it compiles with no errors or obsolete-API warnings, and the 144 tests pass. No API change.
+
 ## 1.38
 
 **The browser key map ships with the renderer, level with the SDL one.** Every browser app on
