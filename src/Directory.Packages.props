@@ -5,7 +5,7 @@
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="DIR.Lib" Version="11.62.*" />
+    <PackageVersion Include="DIR.Lib" Version="11.79.*" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
   </ItemGroup>
 </Project>

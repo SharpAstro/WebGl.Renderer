@@ -6,6 +6,20 @@ The version NUMBER is not here: it lives in `src/Directory.Build.props` (`Versio
 build job reads that property back rather than restating it, so a package can never declare a version
 this file disagrees with. Bump it there and add the entry here, in the same commit.
 
+## 1.40
+
+**Built against DIR.Lib 11.79 (was 11.62).** No renderer code change; a lockstep release with Console.Lib and
+SdlVulkan.Renderer. Every crossed minor is additive in API (DIR.Lib's newest breaking release is 11.25), but two change
+what is drawn:
+
+- **BEHAVIOUR CHANGE (DIR.Lib 11.66):** a stack declared `WithScroll` whose controller draws a bar now measures its cross
+  extent with the bar column added, always, so an Auto-width scrolled list can come out up to 6 design units wider.
+- **Visible change (DIR.Lib 11.72):** a node pairing `Background` with a border rounded on all four sides fills inside the
+  rounded outline, so its square corners show what is beneath.
+- **11.79: a menu panel's Back and close controls are reachable by keyboard** (Tab / Shift+Tab; arrows stay on the rows;
+  Enter runs the focused control). 11.69 and 11.74: the overlay menu panel and its Back / close controls. 11.70: the
+  inspector core in Release, off unless opted in. 11.78: SVG icons.
+
 ## 1.39
 
 **Built against DIR.Lib 11.62 (was 10.4).** Chess pins DIR.Lib 11.x, so NuGet has been loading this package, compiled
